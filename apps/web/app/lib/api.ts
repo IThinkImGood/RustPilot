@@ -1,0 +1,13 @@
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) }
+  });
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error("RustPilot API is niet bereikbaar via deze origin. Open http://127.0.0.1:40120.");
+  }
+  const json = await response.json();
+  if (!json.success) throw new Error(json.error?.message ?? "API-fout");
+  return json.data as T;
+}

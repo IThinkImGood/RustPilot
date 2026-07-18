@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+out/
+data/
+data-*/
+manual-*/
+*.log
+*.pid
+*.tsbuildinfo
+.env
+coverage/
