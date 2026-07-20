@@ -10,3 +10,4 @@ manual-*/
 *.tsbuildinfo
 .env
 coverage/
+release/

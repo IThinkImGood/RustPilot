@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added a Windows portable packaging script that creates a ZIP with `RustPilot.exe`, bundled Node runtime, production backend, static web panel, and runtime dependencies.
+
 ## v0.1.0-alpha.2
 
 Setup and safety polish for the first public alpha.

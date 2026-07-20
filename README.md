@@ -51,7 +51,17 @@ npm run build
 npm run start
 ```
 
-The backend serves the static Next.js export from `apps/web/out`. A real single-file `RustPilot.exe` is not claimed or tested yet; see `docs/DEVELOPMENT.md` for packaging direction.
+The backend serves the static Next.js export from `apps/web/out`.
+
+## Windows Portable Release
+
+```powershell
+npm run package:win
+```
+
+This creates `release/RustPilot-v<version>-win-x64.zip` with a real `RustPilot.exe` launcher, a bundled Node runtime, production server files, production dependencies, and the static web panel. Users can unzip it and start `RustPilot.exe`; no `npm run dev` or local Node.js install is required.
+
+The portable release stores runtime data in the `data` folder next to `RustPilot.exe` unless `RUSTPILOT_DATA_DIR` is set.
 
 ## Runtime Data
 

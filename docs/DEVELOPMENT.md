@@ -6,6 +6,7 @@
 npm run dev
 npm run build
 npm run start
+npm run package:win
 npm run test
 npm run test:watch
 npm run lint
@@ -17,7 +18,16 @@ npm run format
 
 The production build compiles TypeScript and exports the web panel as static files. The backend can then serve the API, WebSockets, and web panel from the same HTTP server.
 
-For a future `RustPilot.exe`, options such as Node SEA or a lightweight Windows launcher around the Node build are worth investigating. This repository does not yet claim a tested single-file executable.
+`npm run package:win` creates a portable Windows ZIP in `release/`. It contains:
+
+- `RustPilot.exe`: a small Windows launcher.
+- `runtime/node.exe`: the bundled Node runtime used by RustPilot.
+- `app/apps/server/dist`: production backend JavaScript.
+- `app/apps/web/out`: exported production web panel.
+- `app/node_modules`: production runtime dependencies.
+- `README.txt`: end-user start notes.
+
+The launcher sets `NODE_ENV=production`, starts the backend from the bundled Node runtime, uses the release folder as the working directory, and stores runtime data in `data/` next to `RustPilot.exe` unless `RUSTPILOT_DATA_DIR` is set.
 
 ## UI Components
 

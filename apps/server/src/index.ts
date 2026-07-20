@@ -52,7 +52,7 @@ app.use("/api", createApiRouter({ storage, adapter, logger, installer, processMa
 const webOut = path.resolve("apps/web/out");
 if (fs.existsSync(webOut) && !config.isDevelopment) {
   app.use(express.static(webOut));
-  app.get("*", (_req, res) => res.sendFile(path.join(webOut, "index.html")));
+  app.use((_req, res) => res.sendFile(path.join(webOut, "index.html")));
 } else if (config.isDevelopment) {
   app.use(
     "/",
@@ -64,7 +64,7 @@ if (fs.existsSync(webOut) && !config.isDevelopment) {
     } as never)
   );
 } else {
-  app.get("*", (_req, res) => res.status(503).send("Web panel build is missing. Run npm run build."));
+  app.use((_req, res) => res.status(503).send("Web panel build is missing. Run npm run build."));
 }
 
 const server = http.createServer(app);
