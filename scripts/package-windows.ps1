@@ -57,15 +57,10 @@ New-Item -ItemType Directory -Force -Path $appDir, $runtimeDir, $releaseRoot | O
 Write-Host "Copying app build..."
 Copy-Directory (Join-Path $root "apps\server\dist") (Join-Path $appDir "apps\server\dist")
 Copy-Directory (Join-Path $root "apps\web\out") (Join-Path $appDir "apps\web\out")
-Copy-Directory (Join-Path $root "packages\shared\dist") (Join-Path $appDir "node_modules\@rustpilot\shared\dist")
-Copy-Directory (Join-Path $root "packages\rust-adapter\dist") (Join-Path $appDir "node_modules\@rustpilot\rust-adapter\dist")
 
 $sharedPackage = Get-Content -LiteralPath (Join-Path $root "packages\shared\package.json") | ConvertFrom-Json
 $adapterPackage = Get-Content -LiteralPath (Join-Path $root "packages\rust-adapter\package.json") | ConvertFrom-Json
 $serverPackage = Get-Content -LiteralPath (Join-Path $root "apps\server\package.json") | ConvertFrom-Json
-
-Write-Json (Join-Path $appDir "node_modules\@rustpilot\shared\package.json") $sharedPackage
-Write-Json (Join-Path $appDir "node_modules\@rustpilot\rust-adapter\package.json") $adapterPackage
 
 $runtimePackage = [ordered]@{
   name = "rustpilot-runtime"
@@ -88,6 +83,12 @@ try {
 } finally {
   Pop-Location
 }
+
+Write-Host "Copying local RustPilot workspace packages..."
+Copy-Directory (Join-Path $root "packages\shared\dist") (Join-Path $appDir "node_modules\@rustpilot\shared\dist")
+Copy-Directory (Join-Path $root "packages\rust-adapter\dist") (Join-Path $appDir "node_modules\@rustpilot\rust-adapter\dist")
+Write-Json (Join-Path $appDir "node_modules\@rustpilot\shared\package.json") $sharedPackage
+Write-Json (Join-Path $appDir "node_modules\@rustpilot\rust-adapter\package.json") $adapterPackage
 
 $nodeExe = (Get-Command node.exe).Source
 $bundledNode = Join-Path $runtimeDir "node.exe"
