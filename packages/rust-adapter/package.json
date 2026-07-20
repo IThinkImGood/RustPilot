@@ -1,6 +1,6 @@
 {
   "name": "@rustpilot/rust-adapter",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@rustpilot/shared": "0.1.0-alpha.3"
+    "@rustpilot/shared": "0.1.0-alpha.4"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

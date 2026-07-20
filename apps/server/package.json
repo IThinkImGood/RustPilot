@@ -1,6 +1,6 @@
 {
   "name": "@rustpilot/server",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -14,8 +14,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@rustpilot/rust-adapter": "0.1.0-alpha.3",
-    "@rustpilot/shared": "0.1.0-alpha.3",
+    "@rustpilot/rust-adapter": "0.1.0-alpha.4",
+    "@rustpilot/shared": "0.1.0-alpha.4",
     "adm-zip": "^0.5.16",
     "express": "^5.1.0",
     "http-proxy-middleware": "^3.0.5",

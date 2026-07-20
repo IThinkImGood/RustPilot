@@ -1,11 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.1.0-alpha.4
 
 ### Added
 
 - Added a Windows portable packaging script that creates a ZIP with `RustPilot.exe`, bundled Node runtime, production backend, static web panel, and runtime dependencies.
 - Added Phase 2 WebRCON support for reliable command execution, WebRCON status, server info/player queries, announcements, kick/ban actions, and scheduled restarts.
+- Added a CFG Editor for `server.cfg`, `users.cfg`, and `bans.cfg`.
+- Added live CPU and RAM usage metrics for RustPilot and RustDedicated.
+- Added a live dashboard usage overview and real metrics history for the activity chart.
+
+### Changed
+
+- Reworked the dashboard into a focused server overview.
+- Refined the admin shell navigation, shared player sidebar, console layout, and compact dashboard paths bar.
 
 ## v0.1.0-alpha.2
 
