@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import express from "express";
 import { commandRequestSchema, settingsUpdateSchema } from "@rustpilot/shared";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
@@ -9,6 +10,7 @@ import type { ServerProcessManager } from "./serverProcessManager.js";
 import type { Storage } from "./storage.js";
 import type { WebRconClient } from "./webRconClient.js";
 import type { RestartScheduler } from "./restartScheduler.js";
+import type { MetricsCollector } from "./metricsCollector.js";
 import { computeSetupStatus } from "./setupStatus.js";
 import { validateInstallDirectory, type InstallDirectoryChoice } from "./installDirectoryValidation.js";
 
@@ -23,6 +25,21 @@ function fail(code: string, message: string, details?: unknown) {
 const SETUP_INCOMPLETE_MESSAGE = "Complete the RustPilot installation first.";
 const WIPE_CONFIRMATION = "WIPE SERVER";
 const RESET_CONFIRMATION = "RESET INSTALLATION";
+const CFG_FILES = [
+  {
+    name: "server.cfg",
+    description: "Main server variables loaded from the server identity cfg folder."
+  },
+  {
+    name: "users.cfg",
+    description: "Owner and moderator assignments."
+  },
+  {
+    name: "bans.cfg",
+    description: "Persistent player bans."
+  }
+] as const;
+const CFG_FILE_NAMES = new Set(CFG_FILES.map((file) => file.name));
 
 function rejectIncompleteSetup(res: express.Response): void {
   res.status(409).json(fail("SETUP_INCOMPLETE", SETUP_INCOMPLETE_MESSAGE));
@@ -60,6 +77,32 @@ function simpleText(value: unknown, maxLength: number): string | null {
   return trimmed;
 }
 
+function getCfgDirectory(deps: { storage: Storage; adapter: RustAdapter }): string {
+  const settings = deps.storage.getSettings();
+  const paths = deps.adapter.getPaths(settings);
+  return path.resolve(paths.serverDir, "server", settings.identity, "cfg");
+}
+
+function getCfgPath(deps: { storage: Storage; adapter: RustAdapter }, fileName: string): string | null {
+  if (!CFG_FILE_NAMES.has(fileName as (typeof CFG_FILES)[number]["name"])) return null;
+  return path.resolve(getCfgDirectory(deps), fileName);
+}
+
+function rejectIfSetupIncomplete(deps: { storage: Storage; adapter: RustAdapter }, res: express.Response): boolean {
+  const setup = computeSetupStatus(deps.storage, deps.adapter);
+  if (!setup.setupCompleted) {
+    rejectIncompleteSetup(res);
+    return true;
+  }
+  return false;
+}
+
+function validateCfgContent(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (value.length > 200_000 || value.includes("\0")) return null;
+  return value.replace(/\r\n/g, "\n");
+}
+
 export function createApiRouter(deps: {
   storage: Storage;
   adapter: RustAdapter;
@@ -68,6 +111,7 @@ export function createApiRouter(deps: {
   processManager: ServerProcessManager;
   webRcon: WebRconClient;
   restartScheduler: RestartScheduler;
+  metrics?: MetricsCollector;
   panelUrl: string;
 }): express.Router {
   const router = express.Router();
@@ -104,6 +148,7 @@ export function createApiRouter(deps: {
         redactedLaunchArgs: deps.adapter.generateRedactedLaunchArguments(settings),
         rcon: deps.webRcon.getStatus(),
         scheduledRestart: deps.restartScheduler.getStatus(),
+        metrics: deps.metrics?.getSnapshot() ?? null,
         websocket: {
           path: "/ws",
           url: deps.panelUrl.replace(/^http/, "ws") + "/ws"
@@ -234,6 +279,51 @@ export function createApiRouter(deps: {
     } catch (error) {
       res.status(409).json(fail("COMMAND_UNAVAILABLE", error instanceof Error ? error.message : String(error)));
     }
+  });
+  router.get("/cfg-files", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const cfgDirectory = getCfgDirectory(deps);
+    res.json(
+      ok({
+        directory: cfgDirectory,
+        files: CFG_FILES.map((file) => {
+          const filePath = path.resolve(cfgDirectory, file.name);
+          const exists = fs.existsSync(filePath);
+          return {
+            ...file,
+            exists,
+            sizeBytes: exists ? fs.statSync(filePath).size : 0
+          };
+        })
+      })
+    );
+  });
+  router.get("/cfg-files/:fileName", (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const filePath = getCfgPath(deps, req.params.fileName);
+    if (!filePath) {
+      res.status(404).json(fail("CFG_FILE_NOT_ALLOWED", "This cfg file is not editable."));
+      return;
+    }
+    const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
+    res.json(ok({ name: req.params.fileName, content, exists: fs.existsSync(filePath) }));
+  });
+  router.put("/cfg-files/:fileName", (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const filePath = getCfgPath(deps, req.params.fileName);
+    if (!filePath) {
+      res.status(404).json(fail("CFG_FILE_NOT_ALLOWED", "This cfg file is not editable."));
+      return;
+    }
+    const content = validateCfgContent(req.body?.content);
+    if (content === null) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Cfg content must be text and at most 200 KB."));
+      return;
+    }
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content, "utf8");
+    deps.logger.emit("rustpilot", "system", "info", `Saved cfg file: ${req.params.fileName}`);
+    res.json(ok({ name: req.params.fileName, content, exists: true }));
   });
   router.get("/rcon/status", (_req, res) => {
     res.json(ok(deps.webRcon.getStatus()));

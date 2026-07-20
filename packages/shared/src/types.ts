@@ -65,6 +65,29 @@ export interface ScheduledRestartStatus {
   reason: string | null;
 }
 
+export interface ProcessUsageSample {
+  name: string;
+  pid: number | null;
+  cpuPercent: number | null;
+  memoryRssBytes: number | null;
+}
+
+export interface UsageHistoryPoint {
+  timestamp: string;
+  rustPilotCpuPercent: number | null;
+  rustPilotMemoryRssBytes: number | null;
+  rustServerCpuPercent: number | null;
+  rustServerMemoryRssBytes: number | null;
+}
+
+export interface UsageMetrics {
+  sampledAt: string | null;
+  cpuCount: number;
+  rustPilot: ProcessUsageSample;
+  rustServer: ProcessUsageSample;
+  history: UsageHistoryPoint[];
+}
+
 export interface SetupStatus {
   completed: boolean;
   setupCompleted?: boolean;

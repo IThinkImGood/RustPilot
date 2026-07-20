@@ -15,6 +15,7 @@ import { InstallManager } from "./installManager.js";
 import { ServerProcessManager } from "./serverProcessManager.js";
 import { WebRconClient } from "./webRconClient.js";
 import { RestartScheduler } from "./restartScheduler.js";
+import { MetricsCollector } from "./metricsCollector.js";
 import { createApiRouter } from "./api.js";
 import { attachWebSocketServer } from "./websocket.js";
 import { openBrowser } from "./browser.js";
@@ -49,10 +50,12 @@ const installer = new InstallManager(adapter, storage, logger, runner);
 const webRcon = new WebRconClient(logger);
 const processManager = new ServerProcessManager(adapter, storage, logger, runner, webRcon);
 const restartScheduler = new RestartScheduler(storage, processManager, logger);
+const metrics = new MetricsCollector(processManager);
+metrics.start();
 
 const app = express();
 app.disable("x-powered-by");
-app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, panelUrl }));
+app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, metrics, panelUrl }));
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const webOutCandidates = [
@@ -79,7 +82,7 @@ if (fs.existsSync(webOut) && !config.isDevelopment) {
 }
 
 const server = http.createServer(app);
-attachWebSocketServer(server, logger, processManager, installer, storage, adapter, webRcon, restartScheduler);
+attachWebSocketServer(server, logger, processManager, installer, storage, adapter, webRcon, restartScheduler, metrics);
 
 async function isExistingRustPilotPanelAvailable(): Promise<boolean> {
   const controller = new AbortController();
@@ -102,6 +105,7 @@ function closeStartupResources(exitCode: number): void {
   } catch {
     // The server may not have started listening yet.
   }
+  metrics.stop();
   storage.close();
   lock.release();
   process.exit(exitCode);
@@ -202,6 +206,7 @@ async function shutdown(): Promise<void> {
   } finally {
     server.close();
     rl.close();
+    metrics.stop();
     storage.close();
     lock.release();
     process.exit(0);

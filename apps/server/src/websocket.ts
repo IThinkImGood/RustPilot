@@ -8,6 +8,7 @@ import type { RustAdapter } from "@rustpilot/rust-adapter";
 import { computeSetupStatus } from "./setupStatus.js";
 import type { WebRconClient } from "./webRconClient.js";
 import type { RestartScheduler } from "./restartScheduler.js";
+import type { MetricsCollector } from "./metricsCollector.js";
 
 export function attachWebSocketServer(
   server: http.Server,
@@ -17,7 +18,8 @@ export function attachWebSocketServer(
   storage: Storage,
   adapter: RustAdapter,
   webRcon: WebRconClient,
-  restartScheduler: RestartScheduler
+  restartScheduler: RestartScheduler,
+  metrics?: MetricsCollector
 ): void {
   const wss = new WebSocketServer({ server, path: "/ws" });
   const broadcast = (payload: unknown) => {
@@ -35,6 +37,7 @@ export function attachWebSocketServer(
         setup: computeSetupStatus(storage, adapter),
         rcon: webRcon.getStatus(),
         scheduledRestart: restartScheduler.getStatus(),
+        metrics: metrics?.getSnapshot() ?? null,
         installRunning: installManager.isRunning()
       }
     });
@@ -54,6 +57,7 @@ export function attachWebSocketServer(
           setup: computeSetupStatus(storage, adapter),
           rcon: webRcon.getStatus(),
           scheduledRestart: restartScheduler.getStatus(),
+          metrics: metrics?.getSnapshot() ?? null,
           installRunning: installManager.isRunning()
         }
       })

@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import express from "express";
 import { WebSocketServer } from "ws";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -537,6 +537,58 @@ describe("setup-gated API actions", () => {
       const settings = f.storage.getSettings();
       expect(settings.maxPlayers).toBe(75);
       expect(settings.rconPassword).toBe(defaultServerSettings.rconPassword);
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("saves and reads whitelisted cfg files", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const body = 'server.hostname "RustPilot Test"\nserver.maxplayers 75\n';
+      const saveResponse = await fetch(`${baseUrl}/cfg-files/server.cfg`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: body })
+      });
+      expect(saveResponse.status).toBe(200);
+      const cfgPath = path.join(f.paths.serverDir, "server", defaultServerSettings.identity, "cfg", "server.cfg");
+      expect(readFileSync(cfgPath, "utf8")).toBe(body);
+
+      const readResponse = await fetch(`${baseUrl}/cfg-files/server.cfg`);
+      expect(readResponse.status).toBe(200);
+      expect(await readResponse.json()).toMatchObject({
+        success: true,
+        data: { name: "server.cfg", content: body, exists: true }
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("rejects non-whitelisted cfg file names", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/cfg-files/..%2Fserverauto.cfg`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "server.seed 1" })
+      });
+      expect(response.status).toBe(404);
     } finally {
       server.close();
       f.cleanup();
