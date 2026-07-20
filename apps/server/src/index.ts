@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
 import readline from "node:readline";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { RustAdapter, ensureRuntimeDirectories } from "@rustpilot/rust-adapter";
@@ -49,7 +50,13 @@ const app = express();
 app.disable("x-powered-by");
 app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, panelUrl }));
 
-const webOut = path.resolve("apps/web/out");
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const webOutCandidates = [
+  path.resolve("apps/web/out"),
+  path.resolve("app/apps/web/out"),
+  path.resolve(moduleDir, "../../web/out")
+];
+const webOut = webOutCandidates.find((candidate) => fs.existsSync(candidate)) ?? webOutCandidates[0];
 if (fs.existsSync(webOut) && !config.isDevelopment) {
   app.use(express.static(webOut));
   app.use((_req, res) => res.sendFile(path.join(webOut, "index.html")));
