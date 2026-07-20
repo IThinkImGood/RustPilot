@@ -4,11 +4,16 @@ import { defaultServerSettings } from "@rustpilot/shared/browser";
 import { api } from "../lib/api";
 import { useRustPilot } from "../lib/useRustPilot";
 import { ProtectedPage } from "../lib/ProtectedPage";
+import { getDashboardActionStates } from "../lib/actions";
 
 export default function SettingsPage() {
   const guard = useRustPilot();
   const [form, setForm] = useState<any>(defaultServerSettings);
   const [message, setMessage] = useState("");
+  const [messageKind, setMessageKind] = useState<"ok" | "error">("ok");
+  const [serverFileMessage, setServerFileMessage] = useState("");
+  const [serverFileMessageKind, setServerFileMessageKind] = useState<"ok" | "error">("ok");
+  const [serverFileAction, setServerFileAction] = useState<"install" | "update" | null>(null);
   const [dangerMessage, setDangerMessage] = useState("");
   const [dangerMessageKind, setDangerMessageKind] = useState<"ok" | "error">("ok");
   const [confirmationText, setConfirmationText] = useState("");
@@ -20,6 +25,12 @@ export default function SettingsPage() {
     confirmingAction === "wipe"
       ? "This stops the server and deletes the current identity/save data. SteamCMD and installed server files stay in place."
       : "This stops the server, removes managed SteamCMD/server/profile/log folders, clears setup state, and sends RustPilot back to setup.";
+  const serverFileActions = getDashboardActionStates({
+    setupCompleted: guard.status?.setup?.setupCompleted === true,
+    installationState: guard.status?.setup?.installationState,
+    processState: guard.status?.process?.processState,
+    installRunning: guard.status?.installRunning
+  });
   useEffect(() => {
     api<any>("/settings").then((settings) => setForm({ ...defaultServerSettings, ...settings, rconPassword: "" }));
   }, []);
@@ -29,8 +40,18 @@ export default function SettingsPage() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setMessage("");
-    await api("/settings", { method: "PUT", body: JSON.stringify(form) });
-    setMessage("Settings saved. Server launch settings apply on the next restart.");
+    setMessageKind("ok");
+    const body = { ...form };
+    if (body.rconPassword === "") delete body.rconPassword;
+    try {
+      const settings = await api<any>("/settings", { method: "PUT", body: JSON.stringify(body) });
+      setForm({ ...defaultServerSettings, ...settings, rconPassword: "" });
+      setMessage("Settings saved. Server launch settings apply on the next restart.");
+      await guard.refresh();
+    } catch (error) {
+      setMessageKind("error");
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
   }
   async function wipeServer() {
     setDangerAction("wipe");
@@ -66,6 +87,21 @@ export default function SettingsPage() {
       setDangerMessageKind("error");
       setDangerMessage(error instanceof Error ? error.message : String(error));
       setDangerAction(null);
+    }
+  }
+  async function runServerFileAction(path: string, action: "install" | "update") {
+    setServerFileAction(action);
+    setServerFileMessage("");
+    setServerFileMessageKind("ok");
+    try {
+      await api(path, { method: "POST", body: "{}" });
+      setServerFileMessage(action === "install" ? "Installation started." : "Update started.");
+      await guard.refresh();
+    } catch (error) {
+      setServerFileMessageKind("error");
+      setServerFileMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setServerFileAction(null);
     }
   }
   function openConfirmation(action: "wipe" | "reset") {
@@ -104,8 +140,29 @@ export default function SettingsPage() {
         </div>
         <label style={{ marginTop: 14 }}>Description<textarea value={form.description} onChange={(e) => set("description", e.target.value)} /></label>
         <p className="muted">Changes to server launch settings require a RustDedicated.exe restart.</p>
-        <div className="actions"><button className="primary">Save</button><span className="muted">{message}</span></div>
+        <div className="actions"><button className="primary">Save</button><span className={messageKind === "error" ? "validation-message error" : "muted"}>{message}</span></div>
       </form>
+      <section className="panel server-files-panel">
+        <div>
+          <h2>Server files</h2>
+          <p className="muted">Install or update SteamCMD and Rust Dedicated Server files. Updates require the server process to be stopped.</p>
+        </div>
+        <div className="server-files-actions">
+          <button
+            onClick={() => runServerFileAction("/install", "install")}
+            disabled={!serverFileActions.install || serverFileAction !== null}
+          >
+            {serverFileAction === "install" ? "Installing..." : "Install"}
+          </button>
+          <button
+            onClick={() => runServerFileAction("/update", "update")}
+            disabled={!serverFileActions.update || serverFileAction !== null}
+          >
+            {serverFileAction === "update" ? "Updating..." : "Update"}
+          </button>
+        </div>
+        {serverFileMessage && <p className={`validation-message ${serverFileMessageKind}`}>{serverFileMessage}</p>}
+      </section>
       <section className="panel danger-zone">
         <div className="danger-zone-header">
           <h2>DANGER ZONE</h2>

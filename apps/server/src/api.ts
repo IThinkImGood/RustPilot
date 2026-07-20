@@ -139,7 +139,9 @@ export function createApiRouter(deps: {
       return;
     }
     const existing = deps.storage.getSettings();
-    const parsed = settingsUpdateSchema.safeParse({ ...existing, ...req.body });
+    const updates = { ...req.body };
+    if (!setupFlow && updates.rconPassword === "") delete updates.rconPassword;
+    const parsed = settingsUpdateSchema.safeParse({ ...existing, ...updates });
     if (!parsed.success) {
       res.status(400).json(fail("VALIDATION_FAILED", "Settings are invalid.", parsed.error.flatten()));
       return;
@@ -285,6 +287,14 @@ export function createApiRouter(deps: {
     const command = reasonRaw ? `kick ${rconQuote(player)} ${rconQuote(reasonRaw)}` : `kick ${rconQuote(player)}`;
     try {
       res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), command)));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/kick-all", async (_req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), "kickall")));
     } catch (error) {
       res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
     }

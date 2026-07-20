@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { DirectDevPortRedirect } from "./DirectDevPortRedirect";
 import { getAppLayoutMode, shouldRedirectForSetup } from "./layoutMode";
 import { PlayerAdminPanel } from "./PlayerAdminPanel";
+import { ServerControlsPanel } from "./ServerControlsPanel";
 import { useRustPilot } from "./useRustPilot";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -65,10 +66,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="shell">
         <nav className="nav">
           <div className="brand">RustPilot</div>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/console">Console</Link>
-          <Link href="/settings">Settings</Link>
-          {!setupCompleted && <Link href="/setup">Setup</Link>}
+          <div className="nav-links">
+            <Link href="/dashboard">Dashboard</Link>
+            <Link href="/console">Console</Link>
+            <Link href="/settings">Settings</Link>
+            {!setupCompleted && <Link href="/setup">Setup</Link>}
+          </div>
+          <ServerControlsPanel status={status} refresh={refresh} />
         </nav>
         <main className="main">{redirectTarget && redirectTarget !== pathname ? <section className="panel">Redirecting...</section> : children}</main>
         <aside className="app-player-sidebar">

@@ -435,6 +435,74 @@ describe("setup-gated API actions", () => {
     }
   });
 
+  it("sends kickall through WebRCON for kick-all players", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
+    await processManager.start(defaultServerSettings);
+    f.runner.children[0]!.stdout.emit("data", Buffer.from("server ready\n"));
+    const sentCommands: string[] = [];
+    const installer = {
+      isRunning: () => false,
+      install: async () => undefined,
+      update: async () => undefined
+    } as unknown as InstallManager;
+    const webRcon = {
+      getStatus: () => ({ state: "connected", endpoint: null, connectedAt: null, lastError: null, pendingCommands: 0 }),
+      connect: async () => undefined,
+      sendCommand: async (_settings: unknown, command: string) => {
+        sentCommands.push(command);
+        return {
+          command,
+          message: "ok",
+          identifier: 1,
+          type: "Generic",
+          durationMs: 1
+        };
+      }
+    } as unknown as WebRconClient;
+    const restartScheduler = {
+      getStatus: () => ({ scheduled: false, runAt: null, reason: null }),
+      schedule: (delayMinutes: number, reason: string | null) => ({
+        scheduled: true,
+        runAt: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
+        reason
+      }),
+      cancel: () => ({ scheduled: false, runAt: null, reason: null })
+    } as unknown as RestartScheduler;
+    const app = express();
+    app.use(
+      "/api",
+      createApiRouter({
+        storage: f.storage,
+        adapter: f.adapter,
+        logger: f.logger,
+        installer,
+        processManager,
+        webRcon,
+        restartScheduler,
+        panelUrl: "http://127.0.0.1:40815"
+      })
+    );
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/rcon/kick-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      expect(response.status).toBe(200);
+      expect(sentCommands).toEqual(["kickall"]);
+    } finally {
+      f.runner.children[0]?.emit("exit", 0, null);
+      server.close();
+      f.cleanup();
+    }
+  });
+
   it("rejects normal settings changes during incomplete setup", async () => {
     const response = await request("/settings", {
       method: "PUT",
@@ -450,6 +518,29 @@ describe("setup-gated API actions", () => {
       body: JSON.stringify(defaultServerSettings)
     });
     expect(response.status).toBe(200);
+  });
+
+  it("keeps the existing rcon password when normal settings save sends an empty password", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...defaultServerSettings, maxPlayers: 75, rconPassword: "" })
+      });
+      expect(response.status).toBe(200);
+      const settings = f.storage.getSettings();
+      expect(settings.maxPlayers).toBe(75);
+      expect(settings.rconPassword).toBe(defaultServerSettings.rconPassword);
+    } finally {
+      server.close();
+      f.cleanup();
+    }
   });
 });
 

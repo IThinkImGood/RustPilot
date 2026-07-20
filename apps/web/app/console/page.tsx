@@ -11,13 +11,6 @@ export default function ConsolePage() {
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [source, setSource] = useState("all");
   const [autoScroll, setAutoScroll] = useState(true);
-  const [announcement, setAnnouncement] = useState("");
-  const [playerTarget, setPlayerTarget] = useState("");
-  const [reason, setReason] = useState("");
-  const [restartDelay, setRestartDelay] = useState("15");
-  const [restartReason, setRestartReason] = useState("");
-  const [rconBusy, setRconBusy] = useState<string | null>(null);
-  const [playerSearch, setPlayerSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const filtered = useMemo(() => events.filter((event) => source === "all" || event.source === source), [events, source]);
 
@@ -33,22 +26,6 @@ export default function ConsolePage() {
     setHistory((current) => [text, ...current.slice(0, 49)]);
     setHistoryIndex(null);
     setCommand("");
-  }
-
-  async function rconAction(path: string, name: string, body: Record<string, string> = {}) {
-    setRconBusy(name);
-    try {
-      await api(path, { method: "POST", body: JSON.stringify(body) });
-      if (name === "say") setAnnouncement("");
-      if (name === "kick" || name === "ban") {
-        setPlayerTarget("");
-        setReason("");
-      }
-      if (name === "schedule-restart") setRestartReason("");
-      await refresh();
-    } finally {
-      setRconBusy(null);
-    }
   }
 
   function keyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -84,11 +61,6 @@ export default function ConsolePage() {
           auto-scroll
         </label>
         <button onClick={() => setEvents([])}>Clear local view</button>
-        <button onClick={() => rconAction("/rcon/connect", "connect")} disabled={status?.process?.processState !== "running" || rconBusy !== null}>
-          {rconBusy === "connect" ? "Connecting..." : `WebRCON ${status?.rcon?.state ?? "unknown"}`}
-        </button>
-        <button onClick={() => rconAction("/rcon/server-info", "server-info")} disabled={status?.process?.processState !== "running" || rconBusy !== null}>Server info</button>
-        <button onClick={() => rconAction("/rcon/players", "players")} disabled={status?.process?.processState !== "running" || rconBusy !== null}>Players</button>
       </div>
       <div className="console" ref={ref} onScroll={() => {
         const el = ref.current;
@@ -111,57 +83,6 @@ export default function ConsolePage() {
         />
         <button className="primary" disabled={status?.process?.processState !== "running"}>Send</button>
       </form>
-      <div className="panel console-tools">
-        <h2>WebRCON Tools</h2>
-        <div className="form">
-          <label>
-            Announcement
-            <input value={announcement} onChange={(event) => setAnnouncement(event.target.value)} placeholder="Message to all players" maxLength={200} />
-          </label>
-          <label>
-            Player search
-            <input value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search by name or Steam ID" maxLength={80} />
-          </label>
-          <label>
-            Player name or Steam ID
-            <input value={playerTarget} onChange={(event) => setPlayerTarget(event.target.value)} placeholder="Player target" maxLength={80} />
-          </label>
-          <label>
-            Reason
-            <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Optional reason" maxLength={160} />
-          </label>
-          <label>
-            Restart delay minutes
-            <input type="number" min={1} max={1440} value={restartDelay} onChange={(event) => setRestartDelay(event.target.value)} />
-          </label>
-          <label>
-            Restart reason
-            <input value={restartReason} onChange={(event) => setRestartReason(event.target.value)} placeholder="Optional restart reason" maxLength={160} />
-          </label>
-        </div>
-        <div className="actions" style={{ marginTop: 12 }}>
-          <button onClick={() => rconAction("/rcon/say", "say", { message: announcement })} disabled={status?.process?.processState !== "running" || !announcement.trim() || rconBusy !== null}>
-            {rconBusy === "say" ? "Sending..." : "Announce"}
-          </button>
-          <button onClick={() => rconAction("/rcon/kick", "kick", { player: playerTarget, reason })} disabled={status?.process?.processState !== "running" || !playerTarget.trim() || rconBusy !== null}>
-            {rconBusy === "kick" ? "Kicking..." : "Kick"}
-          </button>
-          <button className="danger" onClick={() => rconAction("/rcon/ban", "ban", { player: playerTarget, reason })} disabled={status?.process?.processState !== "running" || !playerTarget.trim() || rconBusy !== null}>
-            {rconBusy === "ban" ? "Banning..." : "Ban"}
-          </button>
-          <button onClick={() => rconAction("/scheduler/restart", "schedule-restart", { delayMinutes: restartDelay, reason: restartReason })} disabled={status?.process?.processState !== "running" || rconBusy !== null}>
-            {rconBusy === "schedule-restart" ? "Scheduling..." : "Schedule restart"}
-          </button>
-          <button onClick={() => rconAction("/scheduler/restart/cancel", "cancel-restart")} disabled={!status?.scheduledRestart?.scheduled || rconBusy !== null}>
-            {rconBusy === "cancel-restart" ? "Cancelling..." : "Cancel restart"}
-          </button>
-        </div>
-        <p className="muted">Scheduled restart: {status?.scheduledRestart?.scheduled ? formatRestart(status.scheduledRestart.runAt) : "none"}</p>
-      </div>
     </ProtectedPage>
   );
-}
-
-function formatRestart(runAt?: string | null) {
-  return runAt ? new Date(runAt).toLocaleString() : "none";
 }

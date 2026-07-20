@@ -17,18 +17,18 @@ interface RconPlayer {
 
 export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
   const [players, setPlayers] = useState<RconPlayer[]>([]);
-  const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
+  const [activePlayer, setActivePlayer] = useState<RconPlayer | null>(null);
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerReason, setPlayerReason] = useState("");
   const [playerMessage, setPlayerMessage] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const rconReady = status?.process?.processState === "running";
+  const maxPlayers = status?.settings?.maxPlayers;
   const filteredPlayers = players.filter((player) => {
     const query = playerSearch.trim().toLowerCase();
     if (!query) return true;
     return player.name.toLowerCase().includes(query) || player.id.toLowerCase().includes(query);
   });
-  const allVisibleSelected = filteredPlayers.length > 0 && filteredPlayers.every((player) => selectedPlayers.includes(player.id));
 
   async function loadPlayers() {
     setPendingAction("players");
@@ -37,7 +37,7 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
       const response = await api<RconCommandResponse>("/rcon/players", { method: "POST", body: "{}" });
       const nextPlayers = parseRconPlayers(response.message);
       setPlayers(nextPlayers);
-      setSelectedPlayers((current) => current.filter((id) => nextPlayers.some((player) => player.id === id)));
+      setActivePlayer((current) => current && nextPlayers.some((player) => player.id === current.id) ? current : null);
       setPlayerMessage(nextPlayers.length > 0 ? `Loaded ${nextPlayers.length} player${nextPlayers.length === 1 ? "" : "s"}.` : "No online players found.");
       await refresh();
     } catch (error) {
@@ -47,32 +47,30 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
     }
   }
 
-  function togglePlayer(id: string) {
-    setSelectedPlayers((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  function openPlayer(player: RconPlayer) {
+    setActivePlayer(player);
+    setPlayerReason("");
+    setPlayerMessage("");
   }
 
-  function toggleAllPlayers() {
-    const visibleIds = filteredPlayers.map((player) => player.id);
-    const allVisible = visibleIds.length > 0 && visibleIds.every((id) => selectedPlayers.includes(id));
-    setSelectedPlayers((current) => allVisible ? current.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...current, ...visibleIds])));
+  function closePlayer() {
+    setActivePlayer(null);
+    setPlayerReason("");
   }
 
   async function playerAction(kind: "kick" | "ban") {
-    const targets = players.filter((player) => selectedPlayers.includes(player.id));
-    if (targets.length === 0) return;
+    if (!activePlayer) return;
     setPendingAction(kind);
     setPlayerMessage("");
+    const playerName = activePlayer.name;
     try {
-      for (const player of targets) {
-        await api(`/rcon/${kind}`, {
-          method: "POST",
-          body: JSON.stringify({ player: player.target, reason: playerReason })
-        });
-      }
-      setPlayerMessage(`${kind === "kick" ? "Kicked" : "Banned"} ${targets.length} player${targets.length === 1 ? "" : "s"}.`);
-      setSelectedPlayers([]);
-      setPlayerReason("");
+      await api(`/rcon/${kind}`, {
+        method: "POST",
+        body: JSON.stringify({ player: activePlayer.target, reason: playerReason })
+      });
+      closePlayer();
       await loadPlayers();
+      setPlayerMessage(`${kind === "kick" ? "Kicked" : "Banned"} ${playerName}.`);
     } catch (error) {
       setPlayerMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -81,46 +79,68 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
   }
 
   return (
-    <section className="card player-admin">
-      <div className="player-admin-header">
+    <>
+      <section className="card player-count-card">
         <div>
-          <h2>Players</h2>
-          <p className="muted">{selectedPlayers.length} selected</p>
+          <span className="muted">Online players</span>
+          <strong>{players.length}{typeof maxPlayers === "number" ? ` / ${maxPlayers}` : ""}</strong>
         </div>
-        <button onClick={loadPlayers} disabled={!rconReady || pendingAction !== null}>
-          {pendingAction === "players" ? "Loading..." : "Refresh"}
-        </button>
-      </div>
-      <button className="player-select-all" onClick={toggleAllPlayers} disabled={filteredPlayers.length === 0}>
-        {allVisibleSelected ? "Clear visible selection" : "Select all visible players"}
-      </button>
-      <input value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search by name or Steam ID" />
-      <div className="player-list">
-        {filteredPlayers.length === 0 ? (
-          <p className="muted">No players loaded. Start the server and refresh the player list.</p>
-        ) : filteredPlayers.map((player) => {
-          const selected = selectedPlayers.includes(player.id);
-          return (
-            <button className={`player-row ${selected ? "selected" : ""}`} key={player.id} onClick={() => togglePlayer(player.id)} aria-pressed={selected}>
-              <span>
-                <strong>{player.name}</strong>
-                <small>{player.id}</small>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <input value={playerReason} onChange={(event) => setPlayerReason(event.target.value)} placeholder="Reason, optional" maxLength={160} />
-      <div className="player-admin-actions">
-        <button onClick={() => playerAction("kick")} disabled={selectedPlayers.length === 0 || pendingAction !== null}>
-          {pendingAction === "kick" ? "Kicking..." : "Kick selected"}
-        </button>
-        <button className="danger" onClick={() => playerAction("ban")} disabled={selectedPlayers.length === 0 || pendingAction !== null}>
-          {pendingAction === "ban" ? "Banning..." : "Ban selected"}
-        </button>
-      </div>
-      {playerMessage && <p className="muted">{playerMessage}</p>}
-    </section>
+      </section>
+      <section className="card player-admin">
+        <div className="player-admin-header">
+          <div>
+            <h2>Players</h2>
+            <p className="muted">{players.length} loaded</p>
+          </div>
+          <button onClick={loadPlayers} disabled={!rconReady || pendingAction !== null}>
+            {pendingAction === "players" ? "Loading..." : "Refresh"}
+          </button>
+        </div>
+        <input value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search by name or Steam ID" />
+        <div className="player-list">
+          {filteredPlayers.length === 0 ? (
+            <p className="muted">No players loaded. Start the server and refresh the player list.</p>
+          ) : filteredPlayers.map((player) => {
+            return (
+              <button className="player-row" key={player.id} onClick={() => openPlayer(player)}>
+                <span>
+                  <strong>{player.name}</strong>
+                  <small>{player.id}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {playerMessage && <p className="muted">{playerMessage}</p>}
+      </section>
+      {activePlayer && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal player-action-modal" role="dialog" aria-modal="true" aria-labelledby="player-action-title">
+            <h2 id="player-action-title">{activePlayer.name}</h2>
+            <p className="muted">{activePlayer.id}</p>
+            <label>
+              <span>Reason, optional</span>
+              <input
+                autoFocus
+                value={playerReason}
+                onChange={(event) => setPlayerReason(event.target.value)}
+                placeholder="Reason, optional"
+                maxLength={160}
+              />
+            </label>
+            <div className="actions">
+              <button onClick={closePlayer} disabled={pendingAction !== null}>Cancel</button>
+              <button onClick={() => playerAction("kick")} disabled={pendingAction !== null}>
+                {pendingAction === "kick" ? "Kicking..." : "Kick"}
+              </button>
+              <button className="danger" onClick={() => playerAction("ban")} disabled={pendingAction !== null}>
+                {pendingAction === "ban" ? "Banning..." : "Ban"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -39,7 +39,7 @@ a {
 .shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 320px;
+  grid-template-columns: 270px minmax(0, 1fr) 320px;
   background: var(--admin-bg);
   color: var(--admin-text);
   overflow-x: hidden;
@@ -48,28 +48,144 @@ a {
 .nav {
   background: #151617;
   color: #f7fafc;
-  padding: 22px 16px;
+  padding: 20px 16px;
   border-right: 1px solid #2b2d31;
 }
 
 .brand {
   color: var(--rust-accent-strong);
-  font-size: 22px;
+  font-size: 25px;
   font-weight: 700;
-  margin-bottom: 24px;
+  margin: 0 0 28px;
+  padding: 0 4px;
+}
+
+.nav-links {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel);
 }
 
 .nav a {
   display: block;
-  padding: 10px 12px;
+  padding: 10px 10px;
   border-radius: 6px;
   color: #ebeef2;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .nav a:hover {
   background: #2a2c31;
   color: #fff;
+}
+
+.nav-server-controls {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel);
+  display: grid;
+  gap: 12px;
+}
+
+.nav-server-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--admin-muted);
+  font-size: 15px;
+}
+
+.nav-server-status strong {
+  font-size: 13px;
+}
+
+.nav-server-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.nav-server-buttons button {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 8px;
+}
+
+.nav-server-icon-button {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+}
+
+.nav-server-icon {
+  display: block;
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-server-filled-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
+.nav-server-pending-icon {
+  display: block;
+  min-width: 23px;
+  text-align: center;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.nav-server-message {
+  margin: 0;
+  color: #ffb2a3;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.nav-restart-panel {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.nav-restart-panel h3 {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.nav-restart-panel p {
+  margin: 0;
+  color: #f3cc3f;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.nav-restart-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.nav-restart-actions button {
+  min-height: 34px;
+  padding: 7px 9px;
 }
 
 .main {
@@ -80,6 +196,9 @@ a {
 }
 
 .app-player-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
   min-width: 0;
   padding: 28px 28px 28px 0;
   background: var(--admin-bg);
@@ -419,6 +538,29 @@ label {
   background: #fffafa;
 }
 
+.server-files-panel {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.server-files-panel h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.server-files-panel p {
+  margin: 0;
+}
+
+.server-files-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .danger-zone-header {
   display: flex;
   align-items: baseline;
@@ -544,12 +686,32 @@ textarea {
 
 .player-admin {
   position: sticky;
-  top: 28px;
+  top: 124px;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 152px);
   align-self: stretch;
+}
+
+.player-count-card {
+  position: sticky;
+  top: 28px;
+  min-height: 84px;
+  display: grid;
+  align-items: center;
+}
+
+.player-count-card span,
+.player-count-card strong {
+  display: block;
+}
+
+.player-count-card strong {
+  margin-top: 4px;
+  color: var(--admin-text);
+  font-size: 32px;
+  line-height: 1;
 }
 
 .player-admin-header {
@@ -854,14 +1016,30 @@ textarea {
     align-items: center;
     overflow-x: auto;
   }
+  .nav-links {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 0;
+    border-bottom: 0;
+  }
+  .nav-server-controls {
+    min-width: 280px;
+    margin-top: 0;
+  }
   .brand {
     margin: 0 10px 0 0;
+    padding: 0;
   }
   .main {
     padding: 18px;
   }
   .app-player-sidebar {
+    grid-template-rows: auto auto;
     padding: 0 18px 18px;
+  }
+  .player-count-card {
+    position: static;
   }
   .player-admin {
     position: static;
@@ -884,6 +1062,13 @@ textarea {
   }
   .danger-zone-header {
     display: grid;
+  }
+  .server-files-panel {
+    grid-template-columns: 1fr;
+  }
+  .server-files-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
   .danger-action {
     grid-template-columns: 1fr;
