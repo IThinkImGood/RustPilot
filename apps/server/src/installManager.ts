@@ -32,11 +32,11 @@ export class InstallManager {
       fs.mkdirSync(paths.serverDir, { recursive: true });
       if (!fs.existsSync(paths.steamCmdExe)) {
         this.storage.setInstallationState("downloading_steamcmd");
-        this.logger.emit("steamcmd", "system", "info", "SteamCMD wordt gedownload vanaf de officiele Valve-distributie.");
+        this.logger.emit("steamcmd", "system", "info", "Downloading SteamCMD from the official Valve distribution.");
         const zipPath = path.join(os.tmpdir(), `rustpilot-steamcmd-${Date.now()}.zip`);
         await this.downloadFile(STEAMCMD_WINDOWS_ZIP_URL, zipPath);
         this.storage.setInstallationState("extracting_steamcmd");
-        this.logger.emit("steamcmd", "system", "info", "SteamCMD-archief wordt uitgepakt.");
+        this.logger.emit("steamcmd", "system", "info", "Extracting SteamCMD archive.");
         new AdmZip(zipPath).extractAllTo(paths.steamCmdDir, true);
         fs.rmSync(zipPath, { force: true });
       }
@@ -47,7 +47,7 @@ export class InstallManager {
         throw new Error("Installation finished, but RustDedicated.exe was not found.");
       }
       this.storage.setInstallationState("installed");
-      this.logger.emit("steamcmd", "system", "info", "Rust Dedicated Server is geinstalleerd.");
+      this.logger.emit("steamcmd", "system", "info", "Rust Dedicated Server is installed.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.storage.setInstallationState("install_failed", message);

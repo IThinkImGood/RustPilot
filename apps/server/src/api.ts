@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import express from "express";
 import { commandRequestSchema, settingsUpdateSchema } from "@rustpilot/shared";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
@@ -18,9 +19,19 @@ function fail(code: string, message: string, details?: unknown) {
 }
 
 const SETUP_INCOMPLETE_MESSAGE = "Complete the RustPilot installation first.";
+const WIPE_CONFIRMATION = "WIPE SERVER";
+const RESET_CONFIRMATION = "RESET INSTALLATION";
 
 function rejectIncompleteSetup(res: express.Response): void {
   res.status(409).json(fail("SETUP_INCOMPLETE", SETUP_INCOMPLETE_MESSAGE));
+}
+
+function hasConfirmation(req: express.Request, expected: string): boolean {
+  return typeof req.body?.confirmation === "string" && req.body.confirmation.trim() === expected;
+}
+
+function removeDirectory(directory: string): void {
+  fs.rmSync(directory, { recursive: true, force: true });
 }
 
 export function createApiRouter(deps: {
@@ -191,6 +202,53 @@ export function createApiRouter(deps: {
     } catch (error) {
       res.status(409).json(fail("COMMAND_UNAVAILABLE", error instanceof Error ? error.message : String(error)));
     }
+  });
+  router.post("/admin/wipe-server", async (req, res) => {
+    const setup = computeSetupStatus(deps.storage, deps.adapter);
+    if (!setup.setupCompleted) {
+      rejectIncompleteSetup(res);
+      return;
+    }
+    if (deps.installer.isRunning()) {
+      res.status(409).json(fail("INSTALL_RUNNING", "Wait until the current installation or update finishes."));
+      return;
+    }
+    if (!hasConfirmation(req, WIPE_CONFIRMATION)) {
+      res.status(400).json(fail("CONFIRMATION_REQUIRED", `Type ${WIPE_CONFIRMATION} to confirm.`));
+      return;
+    }
+    const settings = deps.storage.getSettings();
+    const paths = deps.adapter.getPaths(settings);
+    await deps.processManager.stop(settings);
+    removeDirectory(paths.identityDir);
+    fs.mkdirSync(paths.identityDir, { recursive: true });
+    deps.logger.emit("rustpilot", "system", "warn", `Server identity data wiped: ${paths.identityDir}`);
+    res.json(ok({ wiped: true, identityDir: paths.identityDir }));
+  });
+  router.post("/admin/reset-installation", async (req, res) => {
+    const setup = computeSetupStatus(deps.storage, deps.adapter);
+    if (!setup.setupCompleted) {
+      rejectIncompleteSetup(res);
+      return;
+    }
+    if (deps.installer.isRunning()) {
+      res.status(409).json(fail("INSTALL_RUNNING", "Wait until the current installation or update finishes."));
+      return;
+    }
+    if (!hasConfirmation(req, RESET_CONFIRMATION)) {
+      res.status(400).json(fail("CONFIRMATION_REQUIRED", `Type ${RESET_CONFIRMATION} to confirm.`));
+      return;
+    }
+    const settings = deps.storage.getSettings();
+    const paths = deps.adapter.getPaths(settings);
+    await deps.processManager.stop(settings);
+    removeDirectory(paths.steamCmdDir);
+    removeDirectory(paths.profileRoot);
+    removeDirectory(paths.logsDir);
+    fs.mkdirSync(paths.logsDir, { recursive: true });
+    deps.storage.resetSetup();
+    deps.logger.emit("rustpilot", "system", "warn", "Installation reset. Setup must be completed again.");
+    res.json(ok({ reset: true }));
   });
   router.get("/logs/recent", (_req, res) => res.json(ok({ events: deps.logger.recent(500) })));
   router.post("/system/open-panel", (_req, res) => {

@@ -63,6 +63,15 @@ export class Storage {
       .run(JSON.stringify(parsed));
   }
 
+  resetSetup(): void {
+    this.db.prepare("DELETE FROM settings WHERE id = 'default'").run();
+    this.db
+      .prepare(
+        "UPDATE runtime SET installation_state = 'not_configured', setup_completed = 0, install_error = NULL, last_start = NULL, last_stop = NULL, last_exit_code = NULL, last_signal = NULL, last_crash_at = NULL WHERE id = 1"
+      )
+      .run();
+  }
+
   getSetupStatus(steamCmdInstalled: boolean, serverInstalled: boolean): SetupStatus {
     const row = this.db.prepare("SELECT * FROM runtime WHERE id = 1").get() as any;
     const configured = Boolean(

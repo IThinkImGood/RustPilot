@@ -173,82 +173,128 @@ export default function SetupPage() {
       )}
       {step === 2 && (
         <form className="panel" onSubmit={save}>
-          <div className="form">
-            <label>
-              <FieldLabel label="Identity" help={helpText.identity} example="Storage folder: data/servers/default/" />
-              <input value={String(form.identity ?? "")} onChange={(e) => set("identity", e.target.value)} aria-describedby="identity-validation" />
-              <span id="identity-validation"><ValidationMessage result={validation.identity} /></span>
-            </label>
-            <label>
-              <FieldLabel label="Install directory" help={helpText.installDirectory} example="Example: D:\\RustServers\\MyServer" />
-              <input value={String(form.installDirectory ?? "")} onChange={(e) => set("installDirectory", e.target.value)} placeholder="Empty = default folder" />
-            </label>
-            <label>
-              <FieldLabel label="Hostname" help={helpText.hostname} />
-              <input value={String(form.hostname ?? "")} onChange={(e) => set("hostname", e.target.value)} />
-            </label>
-            <label>
-              <FieldLabel label="Max players" help={helpText.maxPlayers} />
-              <input type="number" value={String(form.maxPlayers ?? "")} onChange={(e) => set("maxPlayers", e.target.value)} />
-            </label>
-            <label>
-              <FieldLabel label="Game port" help={helpText.gamePort} />
-              <input type="number" value={String(form.gamePort ?? "")} onChange={(e) => set("gamePort", e.target.value)} aria-describedby="gameport-validation" />
-              <span id="gameport-validation"><ValidationMessage result={validation.gamePort} /></span>
-            </label>
-            <label>
-              <FieldLabel label="Query port" help={helpText.queryPort} />
-              <input type="number" value={String(form.queryPort ?? "")} onChange={(e) => set("queryPort", e.target.value)} aria-describedby="queryport-validation" />
-              <span id="queryport-validation"><ValidationMessage result={validation.queryPort} /></span>
-            </label>
-            <label>
-              <FieldLabel label="RCON port" help={helpText.rconPort} />
-              <input type="number" value={String(form.rconPort ?? "")} onChange={(e) => set("rconPort", e.target.value)} aria-describedby="rconport-validation" />
-              <span id="rconport-validation"><ValidationMessage result={validation.rconPort} /></span>
-            </label>
-            <label>
-              <FieldLabel label="RCON password" help={helpText.rconPassword} />
-              <input type="password" value={String(form.rconPassword ?? "")} onChange={(e) => set("rconPassword", e.target.value)} />
-            </label>
-            <label>
-              <FieldLabel label="World size" help={helpText.worldSize} />
-              <input type="number" value={String(form.worldSize ?? "")} onChange={(e) => set("worldSize", e.target.value)} aria-describedby="worldsize-validation" />
-              <span id="worldsize-validation"><ValidationMessage result={validation.worldSize} /></span>
-            </label>
-            <label>
-              <FieldLabel label="Seed" help={helpText.seed} />
-              <input type="number" value={String(form.seed ?? "")} onChange={(e) => set("seed", e.target.value)} aria-describedby="seed-validation" />
-              <span id="seed-validation"><ValidationMessage result={validation.seed} /></span>
-            </label>
-            <label>
-              <FieldLabel label="Save interval" help={helpText.saveInterval} />
-              <input type="number" value={String(form.saveInterval ?? "")} onChange={(e) => set("saveInterval", e.target.value)} />
-            </label>
-            <label>
-              <FieldLabel label="Server URL" help={helpText.serverUrl} />
-              <input value={String(form.serverUrl ?? "")} onChange={(e) => set("serverUrl", e.target.value)} aria-describedby="serverurl-validation" />
-              <span id="serverurl-validation"><ValidationMessage result={validation.serverUrl} /></span>
-            </label>
-            <label>
-              <FieldLabel label="Header image URL" help={helpText.headerImageUrl} />
-              <input value={String(form.headerImageUrl ?? "")} onChange={(e) => set("headerImageUrl", e.target.value)} aria-describedby="headerimage-validation" />
-              <span id="headerimage-validation"><ValidationMessage result={validation.headerImageUrl} /></span>
-            </label>
-            <label>
-              <FieldLabel label="Auto-start" help={helpText.autoStart} />
-              <input type="checkbox" checked={Boolean(form.autoStart)} onChange={(e) => set("autoStart", e.target.checked)} />
-            </label>
-            <label>
-              <FieldLabel label="Open browser automatically" help={helpText.openBrowser} />
-              <input type="checkbox" checked={Boolean(form.openBrowser)} onChange={(e) => set("openBrowser", e.target.checked)} />
-            </label>
+          <div className="setup-form-sections">
+            <section className="setup-form-section">
+              <div className="setup-section-heading">
+                <h2>Server identity</h2>
+                <p>Name, storage identity, and the folder RustPilot installs into.</p>
+              </div>
+              <div className="setup-form-grid">
+                <label>
+                  <FieldLabel label="Identity" help={helpText.identity} example="Storage folder: data/servers/default/" />
+                  <input value={String(form.identity ?? "")} onChange={(e) => set("identity", e.target.value)} aria-describedby="identity-validation" />
+                  <span id="identity-validation"><ValidationMessage result={validation.identity} /></span>
+                </label>
+                <label>
+                  <FieldLabel label="Hostname" help={helpText.hostname} />
+                  <input value={String(form.hostname ?? "")} onChange={(e) => set("hostname", e.target.value)} />
+                </label>
+                <label className="span-3">
+                  <FieldLabel label="Install directory" help={helpText.installDirectory} example="Example: D:\\RustServers\\MyServer" />
+                  <input value={String(form.installDirectory ?? "")} onChange={(e) => set("installDirectory", e.target.value)} placeholder="Empty = default folder" />
+                </label>
+              </div>
+            </section>
+
+            <section className="setup-form-section">
+              <div className="setup-section-heading">
+                <h2>Network and access</h2>
+                <p>Ports must be unique and available before the server can start cleanly.</p>
+              </div>
+              <div className="setup-form-grid">
+                <label>
+                  <FieldLabel label="Max players" help={helpText.maxPlayers} />
+                  <input type="number" value={String(form.maxPlayers ?? "")} onChange={(e) => set("maxPlayers", e.target.value)} />
+                </label>
+                <label>
+                  <FieldLabel label="Game port" help={helpText.gamePort} />
+                  <input type="number" value={String(form.gamePort ?? "")} onChange={(e) => set("gamePort", e.target.value)} aria-describedby="gameport-validation" />
+                  <span id="gameport-validation"><ValidationMessage result={validation.gamePort} /></span>
+                </label>
+                <label>
+                  <FieldLabel label="Query port" help={helpText.queryPort} />
+                  <input type="number" value={String(form.queryPort ?? "")} onChange={(e) => set("queryPort", e.target.value)} aria-describedby="queryport-validation" />
+                  <span id="queryport-validation"><ValidationMessage result={validation.queryPort} /></span>
+                </label>
+                <label>
+                  <FieldLabel label="RCON port" help={helpText.rconPort} />
+                  <input type="number" value={String(form.rconPort ?? "")} onChange={(e) => set("rconPort", e.target.value)} aria-describedby="rconport-validation" />
+                  <span id="rconport-validation"><ValidationMessage result={validation.rconPort} /></span>
+                </label>
+                <label className="span-2">
+                  <FieldLabel label="RCON password" help={helpText.rconPassword} />
+                  <input type="password" value={String(form.rconPassword ?? "")} onChange={(e) => set("rconPassword", e.target.value)} />
+                </label>
+              </div>
+            </section>
+
+            <section className="setup-form-section">
+              <div className="setup-section-heading">
+                <h2>World</h2>
+                <p>Generation and save settings for the Rust world.</p>
+              </div>
+              <div className="setup-form-grid">
+                <label>
+                  <FieldLabel label="World size" help={helpText.worldSize} />
+                  <input type="number" value={String(form.worldSize ?? "")} onChange={(e) => set("worldSize", e.target.value)} aria-describedby="worldsize-validation" />
+                  <span id="worldsize-validation"><ValidationMessage result={validation.worldSize} /></span>
+                </label>
+                <label>
+                  <FieldLabel label="Seed" help={helpText.seed} />
+                  <input type="number" value={String(form.seed ?? "")} onChange={(e) => set("seed", e.target.value)} aria-describedby="seed-validation" />
+                  <span id="seed-validation"><ValidationMessage result={validation.seed} /></span>
+                </label>
+                <label>
+                  <FieldLabel label="Save interval" help={helpText.saveInterval} />
+                  <input type="number" value={String(form.saveInterval ?? "")} onChange={(e) => set("saveInterval", e.target.value)} />
+                </label>
+              </div>
+            </section>
+
+            <section className="setup-form-section">
+              <div className="setup-section-heading">
+                <h2>Server browser</h2>
+                <p>Optional public metadata shown by Rust clients.</p>
+              </div>
+              <div className="setup-form-grid">
+                <label>
+                  <FieldLabel label="Server URL" help={helpText.serverUrl} />
+                  <input value={String(form.serverUrl ?? "")} onChange={(e) => set("serverUrl", e.target.value)} aria-describedby="serverurl-validation" />
+                  <span id="serverurl-validation"><ValidationMessage result={validation.serverUrl} /></span>
+                </label>
+                <label>
+                  <FieldLabel label="Header image URL" help={helpText.headerImageUrl} />
+                  <input value={String(form.headerImageUrl ?? "")} onChange={(e) => set("headerImageUrl", e.target.value)} aria-describedby="headerimage-validation" />
+                  <span id="headerimage-validation"><ValidationMessage result={validation.headerImageUrl} /></span>
+                </label>
+                <label className="span-3">
+                  <FieldLabel label="Description" help={helpText.description} />
+                  <textarea value={String(form.description ?? "")} onChange={(e) => set("description", e.target.value)} />
+                </label>
+              </div>
+            </section>
+
+            <section className="setup-form-section">
+              <div className="setup-section-heading">
+                <h2>Startup</h2>
+                <p>Choose what RustPilot does when the console application starts.</p>
+              </div>
+              <div className="setup-form-grid two-column">
+                <label className="checkbox-field">
+                  <span><FieldLabel label="Auto-start" help={helpText.autoStart} /></span>
+                  <input type="checkbox" checked={Boolean(form.autoStart)} onChange={(e) => set("autoStart", e.target.checked)} />
+                </label>
+                <label className="checkbox-field">
+                  <span><FieldLabel label="Open browser automatically" help={helpText.openBrowser} /></span>
+                  <input type="checkbox" checked={Boolean(form.openBrowser)} onChange={(e) => set("openBrowser", e.target.checked)} />
+                </label>
+              </div>
+            </section>
           </div>
-          <label style={{ marginTop: 14 }}>
-            <FieldLabel label="Description" help={helpText.description} />
-            <textarea value={String(form.description ?? "")} onChange={(e) => set("description", e.target.value)} />
-          </label>
           {error && <p className="validation-message error">{error}</p>}
-          <button className="primary" disabled={hasValidationErrors}>Review</button>
+          <div className="actions setup-actions">
+            <button className="primary" disabled={hasValidationErrors}>Review</button>
+          </div>
         </form>
       )}
       {step === 3 && (

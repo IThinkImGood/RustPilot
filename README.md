@@ -24,6 +24,18 @@ npm run dev
 
 Then open `http://127.0.0.1:40120`. In development, the backend proxies to the Next.js dev server.
 
+## First Run Tutorial
+
+1. Start RustPilot with `npm run dev`.
+2. Open `http://127.0.0.1:40120`.
+3. Complete the setup wizard.
+4. Choose an absolute install directory, for example `D:\RustServers\MyServer`. Leave the field empty only if you want RustPilot to use its default local data folder.
+5. Review the server name, identity, ports, world settings, and RCON password.
+6. Click `Install` and wait for SteamCMD to download the Rust Dedicated Server files.
+7. When setup is complete, use the dashboard or console page to start and manage the server.
+
+If you want to test setup again, go to `Settings`, open `DANGER ZONE`, and use `Reset installation`. This stops the server, removes managed install folders and setup state, and sends RustPilot back to the setup wizard.
+
 ## Tests And Checks
 
 ```powershell

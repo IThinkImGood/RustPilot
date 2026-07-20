@@ -205,8 +205,7 @@ describe("computed setup status", () => {
 });
 
 describe("setup-gated API actions", () => {
-  async function request(pathname: string, init?: RequestInit) {
-    const f = fixture();
+  function createTestApi(f: ReturnType<typeof fixture>) {
     const app = express();
     const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
     const installer = {
@@ -225,12 +224,23 @@ describe("setup-gated API actions", () => {
         panelUrl: "http://127.0.0.1:40120"
       })
     );
+    return app;
+  }
+
+  async function listen(app: express.Express) {
     const server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("No test address");
+    return { server, baseUrl: `http://127.0.0.1:${address.port}/api` };
+  }
+
+  async function request(pathname: string, init?: RequestInit) {
+    const f = fixture();
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
     try {
-      return await fetch(`http://127.0.0.1:${address.port}/api${pathname}`, {
+      return await fetch(`${baseUrl}${pathname}`, {
         ...init,
         headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) }
       });
@@ -296,6 +306,57 @@ describe("setup-gated API actions", () => {
         success: false,
         error: { code: "INSTALL_DIRECTORY_INVALID" }
       });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("wipes server identity data after explicit confirmation", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    writeFileSync(path.join(f.paths.identityDir, "save.dat"), "world");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/admin/wipe-server`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "WIPE SERVER" })
+      });
+      expect(response.status).toBe(200);
+      expect(existsSync(path.join(f.paths.identityDir, "save.dat"))).toBe(false);
+      expect(existsSync(f.paths.identityDir)).toBe(true);
+      expect(computeSetupStatus(f.storage, f.adapter).setupCompleted).toBe(true);
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("resets installation state and managed install folders after explicit confirmation", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    writeFileSync(path.join(f.paths.logsDir, "rustpilot.log"), "log");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/admin/reset-installation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "RESET INSTALLATION" })
+      });
+      expect(response.status).toBe(200);
+      expect(existsSync(f.paths.steamCmdDir)).toBe(false);
+      expect(existsSync(f.paths.profileRoot)).toBe(false);
+      expect(f.storage.getSettingsRecord().exists).toBe(false);
+      expect(computeSetupStatus(f.storage, f.adapter).setupCompleted).toBe(false);
     } finally {
       server.close();
       f.cleanup();

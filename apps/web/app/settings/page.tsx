@@ -9,6 +9,17 @@ export default function SettingsPage() {
   const guard = useRustPilot();
   const [form, setForm] = useState<any>(defaultServerSettings);
   const [message, setMessage] = useState("");
+  const [dangerMessage, setDangerMessage] = useState("");
+  const [dangerMessageKind, setDangerMessageKind] = useState<"ok" | "error">("ok");
+  const [confirmationText, setConfirmationText] = useState("");
+  const [confirmingAction, setConfirmingAction] = useState<"wipe" | "reset" | null>(null);
+  const [dangerAction, setDangerAction] = useState<"wipe" | "reset" | null>(null);
+  const requiredConfirmation = confirmingAction === "wipe" ? "WIPE SERVER" : "RESET INSTALLATION";
+  const confirmingTitle = confirmingAction === "wipe" ? "Wipe server data" : "Reset installation";
+  const confirmingDescription =
+    confirmingAction === "wipe"
+      ? "This stops the server and deletes the current identity/save data. SteamCMD and installed server files stay in place."
+      : "This stops the server, removes managed SteamCMD/server/profile/log folders, clears setup state, and sends RustPilot back to setup.";
   useEffect(() => {
     api<any>("/settings").then((settings) => setForm({ ...defaultServerSettings, ...settings, rconPassword: "" }));
   }, []);
@@ -20,6 +31,55 @@ export default function SettingsPage() {
     setMessage("");
     await api("/settings", { method: "PUT", body: JSON.stringify(form) });
     setMessage("Settings saved. Server launch settings apply on the next restart.");
+  }
+  async function wipeServer() {
+    setDangerAction("wipe");
+    setDangerMessage("");
+    setDangerMessageKind("ok");
+    try {
+      await api("/admin/wipe-server", {
+        method: "POST",
+        body: JSON.stringify({ confirmation: confirmationText })
+      });
+      closeConfirmation();
+      setDangerMessageKind("ok");
+      setDangerMessage("Server identity data wiped. Start the server to generate fresh data.");
+      await guard.refresh();
+    } catch (error) {
+      setDangerMessageKind("error");
+      setDangerMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDangerAction(null);
+    }
+  }
+  async function resetInstallation() {
+    setDangerAction("reset");
+    setDangerMessage("");
+    setDangerMessageKind("ok");
+    try {
+      await api("/admin/reset-installation", {
+        method: "POST",
+        body: JSON.stringify({ confirmation: confirmationText })
+      });
+      location.href = "/setup";
+    } catch (error) {
+      setDangerMessageKind("error");
+      setDangerMessage(error instanceof Error ? error.message : String(error));
+      setDangerAction(null);
+    }
+  }
+  function openConfirmation(action: "wipe" | "reset") {
+    setConfirmingAction(action);
+    setConfirmationText("");
+    setDangerMessage("");
+  }
+  function closeConfirmation() {
+    setConfirmingAction(null);
+    setConfirmationText("");
+  }
+  async function confirmDangerAction() {
+    if (confirmingAction === "wipe") await wipeServer();
+    if (confirmingAction === "reset") await resetInstallation();
   }
   return (
     <ProtectedPage status={guard.status} error={guard.error} loading={guard.loading} onRetry={guard.refresh}>
@@ -46,6 +106,53 @@ export default function SettingsPage() {
         <p className="muted">Changes to server launch settings require a RustDedicated.exe restart.</p>
         <div className="actions"><button className="primary">Save</button><span className="muted">{message}</span></div>
       </form>
+      <section className="panel danger-zone">
+        <div className="danger-zone-header">
+          <h2>DANGER ZONE</h2>
+          <p>Destructive actions require exact confirmation and stop the server before changing files.</p>
+        </div>
+        <div className="danger-action">
+          <div>
+            <h3>Wipe server data</h3>
+            <p className="muted">Stops the server and deletes the current identity/save data. SteamCMD and installed server files stay in place.</p>
+          </div>
+          <button className="danger" onClick={() => openConfirmation("wipe")} disabled={dangerAction !== null}>
+            Wipe server data
+          </button>
+        </div>
+        <div className="danger-action">
+          <div>
+            <h3>Reset installation</h3>
+            <p className="muted">Stops the server, removes managed SteamCMD/server/profile/log folders, clears setup state, and sends RustPilot back to setup.</p>
+          </div>
+          <button className="danger" onClick={() => openConfirmation("reset")} disabled={dangerAction !== null}>
+            Reset installation
+          </button>
+        </div>
+        {dangerMessage && <p className={`validation-message ${dangerMessageKind}`}>{dangerMessage}</p>}
+      </section>
+      {confirmingAction && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal danger-modal" role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title">
+            <h2 id="danger-confirm-title">{confirmingTitle}</h2>
+            <p className="muted">{confirmingDescription}</p>
+            <label>
+              <span>Type <strong>{requiredConfirmation}</strong> to confirm</span>
+              <input autoFocus value={confirmationText} onChange={(event) => setConfirmationText(event.target.value)} />
+            </label>
+            <div className="actions">
+              <button onClick={closeConfirmation} disabled={dangerAction !== null}>Cancel</button>
+              <button
+                className="danger"
+                onClick={confirmDangerAction}
+                disabled={confirmationText !== requiredConfirmation || dangerAction !== null}
+              >
+                {dangerAction === "wipe" ? "Wiping..." : dangerAction === "reset" ? "Resetting..." : confirmingTitle}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </ProtectedPage>
   );
 }

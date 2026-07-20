@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/console">Console</Link>
           <Link href="/settings">Settings</Link>
-          <Link href="/setup">Setup</Link>
+          {!setupCompleted && <Link href="/setup">Setup</Link>}
         </nav>
         <main className="main">{redirectTarget && redirectTarget !== pathname ? <section className="panel">Redirecting...</section> : children}</main>
       </div>

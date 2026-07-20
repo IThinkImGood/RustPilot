@@ -39,7 +39,7 @@ export class ServerProcessManager {
     const paths = this.adapter.getPaths(settings);
     const validation = this.adapter.validateInstallation(settings);
     if (!validation.valid) throw new Error(validation.errors.join(" "));
-    if (!fs.existsSync(paths.rustDedicatedExe)) throw new Error("RustDedicated.exe bestaat niet.");
+    if (!fs.existsSync(paths.rustDedicatedExe)) throw new Error("RustDedicated.exe does not exist.");
     const args = this.adapter.generateLaunchArguments(settings);
     this.logger.emit(
       "rustpilot",

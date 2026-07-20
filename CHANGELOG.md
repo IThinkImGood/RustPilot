@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.0-alpha.2
+
+Setup and safety polish for the first public alpha.
+
+### Changed
+
+- Improved setup wizard alignment and grouped setup fields.
+- Added clearer install progress feedback during installation.
+- Hid the setup navigation entry after setup has completed.
+- Added a Settings danger zone for wiping server data or resetting installation state.
+- Moved destructive confirmations into modal dialogs.
+- Added a first-run tutorial to the GitHub README.
+
 ## v0.1.0-alpha.1
 
 Early open-source preview for local Rust Dedicated Server management on Windows 10/11 x64.
