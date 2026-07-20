@@ -17,7 +17,7 @@ function value(v: unknown) {
 }
 
 export function DashboardView() {
-  const { status, wsState, error, loading, refresh } = useRustPilot();
+  const { status, error, loading, refresh } = useRustPilot();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const process = status?.process;
   const setup = status?.setup;
@@ -31,6 +31,7 @@ export function DashboardView() {
     processState: process?.processState,
     installRunning: status?.installRunning
   });
+
   async function action(path: string, name: string) {
     if (!setupComplete) return;
     setPendingAction(name);
@@ -41,11 +42,11 @@ export function DashboardView() {
       setPendingAction(null);
     }
   }
+
   return (
     <ProtectedPage status={status} error={error} loading={loading} onRetry={refresh}>
       <div className="topbar">
         <h1>Dashboard</h1>
-        <span className="status">WebSocket {wsState}</span>
       </div>
       <div className="actions" style={{ marginBottom: 16 }}>
         <button onClick={() => action("/install", "install")} disabled={!actions.install || pendingAction !== null}>{pendingAction === "install" ? "Installing..." : "Install"}</button>

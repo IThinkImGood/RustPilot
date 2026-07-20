@@ -271,7 +271,7 @@ describe("setup-gated API actions", () => {
         processManager,
         webRcon,
         restartScheduler,
-        panelUrl: "http://127.0.0.1:40120"
+        panelUrl: "http://127.0.0.1:40815"
       })
     );
     return app;
@@ -360,7 +360,7 @@ describe("setup-gated API actions", () => {
         processManager,
         webRcon,
         restartScheduler,
-        panelUrl: "http://127.0.0.1:40120"
+        panelUrl: "http://127.0.0.1:40815"
       })
     );
     const server = app.listen(0, "127.0.0.1");

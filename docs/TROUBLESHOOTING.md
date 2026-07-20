@@ -2,7 +2,7 @@
 
 ## Web Panel Does Not Open
 
-Check whether port `40120` is free and whether the backend logs that the web panel is available.
+Check whether port `40815` is free and whether the backend logs that the web panel is available.
 
 ## SteamCMD Installation Fails
 

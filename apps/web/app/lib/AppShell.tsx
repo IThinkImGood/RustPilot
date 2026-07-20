@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DirectDevPortRedirect } from "./DirectDevPortRedirect";
 import { getAppLayoutMode, shouldRedirectForSetup } from "./layoutMode";
+import { PlayerAdminPanel } from "./PlayerAdminPanel";
 import { useRustPilot } from "./useRustPilot";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -70,6 +71,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {!setupCompleted && <Link href="/setup">Setup</Link>}
         </nav>
         <main className="main">{redirectTarget && redirectTarget !== pathname ? <section className="panel">Redirecting...</section> : children}</main>
+        <aside className="app-player-sidebar">
+          <PlayerAdminPanel status={status} refresh={refresh} />
+        </aside>
       </div>
     </>
   );

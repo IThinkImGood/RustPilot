@@ -1,6 +1,6 @@
 # RustPilot
 
-RustPilot is an open-source management app for a local Rust Dedicated Server on Windows 10/11 x64. It aims to provide the same practical experience as a foreground console application with a local web panel: `RustPilot` starts the backend, opens `http://127.0.0.1:40120`, manages SteamCMD, and starts `RustDedicated.exe` as a child process.
+RustPilot is an open-source management app for a local Rust Dedicated Server on Windows 10/11 x64. It aims to provide the same practical experience as a foreground console application with a local web panel: `RustPilot` starts the backend, opens `http://127.0.0.1:40815`, manages SteamCMD, and starts `RustDedicated.exe` as a child process.
 
 ## Project Status
 
@@ -22,14 +22,14 @@ Node.js and npm are only required when developing RustPilot from source.
 3. Extract the ZIP to a normal folder, for example `C:\RustPilot`.
 4. Start `RustPilot.exe`.
 5. Keep the console window open while using RustPilot.
-6. RustPilot opens the local web panel at `http://127.0.0.1:40120`.
+6. RustPilot opens the local web panel at `http://127.0.0.1:40815`.
 
 The portable release includes the required Node runtime, production backend, production web panel, and runtime dependencies. You do not need to install Node.js or run `npm run dev`.
 
 ## First Run Tutorial
 
 1. Start `RustPilot.exe`.
-2. Open `http://127.0.0.1:40120` if the browser does not open automatically.
+2. Open `http://127.0.0.1:40815` if the browser does not open automatically.
 3. Complete the setup wizard.
 4. Choose an absolute install directory, for example `D:\RustServers\MyServer`. Leave the field empty only if you want RustPilot to use its default local data folder.
 5. Review the server name, identity, ports, world settings, and RCON password.
@@ -45,7 +45,7 @@ npm install
 npm run dev
 ```
 
-Then open `http://127.0.0.1:40120`. In development, the backend proxies to the Next.js dev server.
+Then open `http://127.0.0.1:40815`. In development, the backend proxies to the Next.js dev server.
 
 ## Tests And Checks
 

@@ -9,7 +9,7 @@ RustPilot has a working first-run setup flow with setup guarding, development ro
 Public URL:
 
 ```text
-http://127.0.0.1:40120
+http://127.0.0.1:40815
 ```
 
 The internal Next.js development server normally runs on:
@@ -122,7 +122,7 @@ npm run dev
 Open:
 
 ```text
-http://127.0.0.1:40120
+http://127.0.0.1:40815
 ```
 
 Do not open port `3001` directly.

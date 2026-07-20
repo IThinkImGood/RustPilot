@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "./config.js";
 
 describe("loadAppConfig", () => {
-  it("defaults the backend to 40120 and development frontend to 3001", () => {
+  it("defaults the backend to 40815 and development frontend to 3001", () => {
     const oldEnv = { ...process.env };
     delete process.env.RUSTPILOT_HOST;
     delete process.env.RUSTPILOT_PORT;
@@ -12,7 +12,7 @@ describe("loadAppConfig", () => {
     try {
       const config = loadAppConfig();
       expect(config.host).toBe("127.0.0.1");
-      expect(config.port).toBe(40120);
+      expect(config.port).toBe(40815);
       expect(config.webDevHost).toBe("127.0.0.1");
       expect(config.webDevPort).toBe(3001);
       expect(config.webDevUrl).toBe("http://127.0.0.1:3001");

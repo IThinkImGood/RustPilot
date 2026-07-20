@@ -12,7 +12,7 @@ export interface AppConfig {
 
 export function loadAppConfig(): AppConfig {
   const host = process.env.RUSTPILOT_HOST ?? "127.0.0.1";
-  const port = Number(process.env.RUSTPILOT_PORT ?? 40120);
+  const port = Number(process.env.RUSTPILOT_PORT ?? 40815);
   const webDevHost = process.env.RUSTPILOT_WEB_DEV_HOST ?? "127.0.0.1";
   const webDevPort = Number(process.env.RUSTPILOT_WEB_DEV_PORT ?? 3001);
   return {

@@ -17,6 +17,7 @@ export default function ConsolePage() {
   const [restartDelay, setRestartDelay] = useState("15");
   const [restartReason, setRestartReason] = useState("");
   const [rconBusy, setRconBusy] = useState<string | null>(null);
+  const [playerSearch, setPlayerSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const filtered = useMemo(() => events.filter((event) => source === "all" || event.source === source), [events, source]);
 
@@ -116,6 +117,10 @@ export default function ConsolePage() {
           <label>
             Announcement
             <input value={announcement} onChange={(event) => setAnnouncement(event.target.value)} placeholder="Message to all players" maxLength={200} />
+          </label>
+          <label>
+            Player search
+            <input value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search by name or Steam ID" maxLength={80} />
           </label>
           <label>
             Player name or Steam ID

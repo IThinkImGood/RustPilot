@@ -29,7 +29,7 @@ Early open-source preview for local Rust Dedicated Server management on Windows 
 - First-run setup wizard with setup guarding.
 - User-selectable install directory with server-side validation.
 - SteamCMD download and Rust Dedicated Server install flow.
-- Local web panel on `http://127.0.0.1:40120`.
+- Local web panel on `http://127.0.0.1:40815`.
 - WebSocket-backed live console output.
 - Basic server process controls.
 - SQLite-backed local settings and setup state.

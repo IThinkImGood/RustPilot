@@ -127,7 +127,7 @@ if (!env.RUSTPILOT_DATA_DIR) {
 }
 
 console.log("Starting RustPilot...");
-console.log(`Panel: http://${env.RUSTPILOT_HOST || "127.0.0.1"}:${env.RUSTPILOT_PORT || "40120"}`);
+console.log(`Panel: http://${env.RUSTPILOT_HOST || "127.0.0.1"}:${env.RUSTPILOT_PORT || "40815"}`);
 console.log("");
 
 const child = spawn(nodePath, [entryPath, ...process.argv.slice(2)], {
@@ -172,7 +172,7 @@ Start:
   Double-click RustPilot.exe.
 
 What it does:
-  - Starts the local RustPilot backend on http://127.0.0.1:40120
+  - Starts the local RustPilot backend on http://127.0.0.1:40815
   - Serves the production web panel from this folder
   - Opens the setup wizard or dashboard in your browser
 
