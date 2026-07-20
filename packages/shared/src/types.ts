@@ -41,6 +41,30 @@ export interface ServerRuntimeStatus {
   lastCrashAt: string | null;
 }
 
+export type RconConnectionState = "disabled" | "disconnected" | "connecting" | "connected" | "error";
+
+export interface RconStatus {
+  state: RconConnectionState;
+  endpoint: string | null;
+  connectedAt: string | null;
+  lastError: string | null;
+  pendingCommands: number;
+}
+
+export interface RconCommandResponse {
+  command: string;
+  message: string;
+  identifier: number;
+  type: string | null;
+  durationMs: number;
+}
+
+export interface ScheduledRestartStatus {
+  scheduled: boolean;
+  runAt: string | null;
+  reason: string | null;
+}
+
 export interface SetupStatus {
   completed: boolean;
   setupCompleted?: boolean;

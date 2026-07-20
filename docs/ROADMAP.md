@@ -1,14 +1,21 @@
 # Roadmap
 
-## Phase 2
+## Phase 2 - WebRCON Baseline
 
-- Real WebRCON integration
-- Reliable remote console commands
-- Player list
-- Kick and ban
-- Server information
-- Scheduled restarts
-- Server announcements
+- Real WebRCON integration: implemented
+- Reliable remote console commands: implemented with stdin fallback
+- Player list query: implemented through WebRCON command
+- Kick and ban actions: implemented through WebRCON commands
+- Server information query: implemented through WebRCON command
+- Scheduled restarts: implemented as one active local scheduled restart
+- Server announcements: implemented through WebRCON `say`
+
+Future Phase 2 polish:
+
+- Parse player list responses into structured table rows
+- Persist scheduled restarts across RustPilot restarts
+- Add countdown announcements before scheduled restarts
+- Add safer guided forms for common admin commands
 
 ## Phase 3
 

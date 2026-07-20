@@ -22,6 +22,8 @@ export function DashboardView() {
   const process = status?.process;
   const setup = status?.setup;
   const settings = status?.settings;
+  const rcon = status?.rcon;
+  const scheduledRestart = status?.scheduledRestart;
   const setupComplete = setup?.setupCompleted === true;
   const actions = getDashboardActionStates({
     setupCompleted: setupComplete,
@@ -69,11 +71,24 @@ export function DashboardView() {
           <div className="metric"><span>RustDedicated.exe</span><strong>{setup?.rustExecutableExists ? "found" : "not found"}</strong></div>
         </section>
         <section className="card">
+          <h2>WebRCON</h2>
+          <div className="metric"><span>State</span><strong className="badge">{value(rcon?.state)}</strong></div>
+          <div className="metric"><span>Endpoint</span><strong>{value(rcon?.endpoint)}</strong></div>
+          <div className="metric"><span>Connected</span><strong>{formatLocalDateTime(rcon?.connectedAt)}</strong></div>
+          <div className="metric"><span>Last error</span><strong>{value(rcon?.lastError)}</strong></div>
+        </section>
+        <section className="card">
           <h2>Latest Status</h2>
           <div className="metric"><span>Last start</span><strong>{formatLocalDateTime(process?.startedAt)}</strong></div>
           <div className="metric"><span>Last stop</span><strong>{formatLocalDateTime(process?.stoppedAt)}</strong></div>
           <div className="metric"><span>Exit code</span><strong>{value(process?.lastExitCode)}</strong></div>
           <div className="metric"><span>Crash</span><strong>{formatLocalDateTime(process?.lastCrashAt)}</strong></div>
+        </section>
+        <section className="card">
+          <h2>Scheduled Restart</h2>
+          <div className="metric"><span>Scheduled</span><strong>{scheduledRestart?.scheduled ? "yes" : "no"}</strong></div>
+          <div className="metric"><span>Run at</span><strong>{formatLocalDateTime(scheduledRestart?.runAt)}</strong></div>
+          <div className="metric"><span>Reason</span><strong>{value(scheduledRestart?.reason)}</strong></div>
         </section>
         <section className="card">
           <h2>Paths</h2>

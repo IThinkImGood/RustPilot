@@ -5,6 +5,7 @@ import { RustAdapter } from "@rustpilot/rust-adapter";
 import type { EventLogger } from "./logger.js";
 import type { ProcessRunner } from "./processRunner.js";
 import type { Storage } from "./storage.js";
+import type { WebRconClient } from "./webRconClient.js";
 
 export class ServerProcessManager {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -17,7 +18,8 @@ export class ServerProcessManager {
     private readonly adapter: RustAdapter,
     private readonly storage: Storage,
     private readonly logger: EventLogger,
-    private readonly runner: ProcessRunner
+    private readonly runner: ProcessRunner,
+    private readonly webRcon?: WebRconClient
   ) {}
 
   getStatus(): ServerRuntimeStatus {
@@ -58,11 +60,30 @@ export class ServerProcessManager {
     this.child.on("error", (error) => {
       this.logger.emit("rust-server", "stderr", "error", error.message);
     });
+    setTimeout(() => {
+      if (this.child && this.state !== "stopped" && this.state !== "crashed") {
+        this.webRcon?.connect(settings).catch((error) => {
+          this.logger.emit("rustpilot", "system", "warn", `WebRCON is not ready yet: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      }
+    }, 5000);
   }
 
-  sendConsoleCommand(command: string): void {
+  async sendConsoleCommand(settings: ServerSettings, command: string): Promise<void> {
+    if (this.webRcon) {
+      try {
+        await this.webRcon.sendCommand(settings, command);
+        return;
+      } catch (error) {
+        this.logger.emit("rustpilot", "system", "warn", `WebRCON command failed; falling back to stdin: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    this.sendStdinCommand(command);
+  }
+
+  sendStdinCommand(command: string): void {
     if (!this.child || !this.child.stdin.writable) {
-      throw new Error("Server console is not available. RCON will be added in phase 2 as a more reliable channel.");
+      throw new Error("Server console is not available.");
     }
     this.logger.emit("rust-server", "input", "info", command);
     this.child.stdin.write(`${command}\n`);
@@ -74,8 +95,13 @@ export class ServerProcessManager {
     this.requestedStop = true;
     if (!forced) {
       try {
-        this.sendConsoleCommand("server.save");
-        this.sendConsoleCommand("quit");
+        if (this.webRcon?.getStatus().state === "connected") {
+          await this.webRcon.sendCommand(settings, "server.save");
+          await this.webRcon.sendCommand(settings, "quit");
+        } else {
+          this.sendStdinCommand("server.save");
+          this.sendStdinCommand("quit");
+        }
       } catch (error) {
         this.logger.emit("rustpilot", "system", "warn", String(error));
       }
@@ -105,6 +131,7 @@ export class ServerProcessManager {
 
   async shutdown(settings: ServerSettings): Promise<void> {
     if (this.child) await this.stop(settings);
+    this.webRcon?.disconnect();
   }
 
   private pipeLines(stream: "stdout" | "stderr", data: Buffer): void {
@@ -125,6 +152,7 @@ export class ServerProcessManager {
     );
     this.child?.removeAllListeners();
     this.child = null;
+    this.webRcon?.disconnect();
     this.startedAt = null;
     this.state = crashed ? "crashed" : "stopped";
   }

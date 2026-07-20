@@ -13,6 +13,8 @@ import { Storage } from "./storage.js";
 import { NodeProcessRunner } from "./processRunner.js";
 import { InstallManager } from "./installManager.js";
 import { ServerProcessManager } from "./serverProcessManager.js";
+import { WebRconClient } from "./webRconClient.js";
+import { RestartScheduler } from "./restartScheduler.js";
 import { createApiRouter } from "./api.js";
 import { attachWebSocketServer } from "./websocket.js";
 import { openBrowser } from "./browser.js";
@@ -44,11 +46,13 @@ storage.open();
 logger.emit("rustpilot", "system", "info", "Loading configuration...");
 const runner = new NodeProcessRunner();
 const installer = new InstallManager(adapter, storage, logger, runner);
-const processManager = new ServerProcessManager(adapter, storage, logger, runner);
+const webRcon = new WebRconClient(logger);
+const processManager = new ServerProcessManager(adapter, storage, logger, runner, webRcon);
+const restartScheduler = new RestartScheduler(storage, processManager, logger);
 
 const app = express();
 app.disable("x-powered-by");
-app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, panelUrl }));
+app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, panelUrl }));
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const webOutCandidates = [
@@ -75,7 +79,7 @@ if (fs.existsSync(webOut) && !config.isDevelopment) {
 }
 
 const server = http.createServer(app);
-attachWebSocketServer(server, logger, processManager, installer, storage, adapter);
+attachWebSocketServer(server, logger, processManager, installer, storage, adapter, webRcon, restartScheduler);
 
 async function isExistingRustPilotPanelAvailable(): Promise<boolean> {
   const controller = new AbortController();
@@ -169,7 +173,7 @@ rl.on("line", async (line) => {
     const command = input.split(/\s+/)[1] ?? "help";
     const settings = storage.getSettings();
     try {
-      if (command === "status") logger.emit("rustpilot", "system", "info", JSON.stringify(processManager.getStatus()));
+      if (command === "status") logger.emit("rustpilot", "system", "info", JSON.stringify({ process: processManager.getStatus(), rcon: webRcon.getStatus() }));
       else if (command === "stop") await processManager.stop(settings);
       else if (command === "restart") await processManager.restart(settings);
       else if (command === "open") openBrowser(panelUrl);
@@ -182,7 +186,7 @@ rl.on("line", async (line) => {
     return;
   }
   try {
-    processManager.sendConsoleCommand(input);
+    await processManager.sendConsoleCommand(storage.getSettings(), input);
   } catch (error) {
     logger.emit("rustpilot", "system", "warn", error instanceof Error ? error.message : String(error));
   }

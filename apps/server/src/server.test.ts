@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import express from "express";
+import { WebSocketServer } from "ws";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +17,8 @@ import type { ProcessRunner } from "./processRunner.js";
 import { computeSetupStatus } from "./setupStatus.js";
 import { createApiRouter } from "./api.js";
 import { validateInstallDirectory } from "./installDirectoryValidation.js";
+import { WebRconClient } from "./webRconClient.js";
+import { RestartScheduler } from "./restartScheduler.js";
 
 class FakeChild extends EventEmitter {
   stdout = new PassThrough();
@@ -108,6 +111,31 @@ describe("InstallManager", () => {
       await first;
     } finally {
       f.cleanup();
+    }
+  });
+});
+
+describe("WebRconClient", () => {
+  it("sends JSON commands and matches responses by identifier", async () => {
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await new Promise<void>((resolve) => server.once("listening", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("No test address");
+    server.on("connection", (socket) => {
+      socket.on("message", (data) => {
+        const request = JSON.parse(data.toString("utf8")) as { Identifier: number; Message: string };
+        socket.send(JSON.stringify({ Identifier: request.Identifier, Message: `ran:${request.Message}`, Type: "Generic" }));
+      });
+    });
+    const logger = new EventLogger();
+    const client = new WebRconClient(logger);
+    try {
+      const response = await client.sendCommand({ ...defaultServerSettings, rconPort: address.port }, "serverinfo");
+      expect(response.message).toBe("ran:serverinfo");
+      expect(client.getStatus().state).toBe("connected");
+    } finally {
+      client.disconnect();
+      server.close();
     }
   });
 });
@@ -213,6 +241,26 @@ describe("setup-gated API actions", () => {
       install: async () => undefined,
       update: async () => undefined
     } as unknown as InstallManager;
+    const webRcon = {
+      getStatus: () => ({ state: "disconnected", endpoint: null, connectedAt: null, lastError: null, pendingCommands: 0 }),
+      connect: async () => undefined,
+      sendCommand: async (_settings: unknown, command: string) => ({
+        command,
+        message: "ok",
+        identifier: 1,
+        type: "Generic",
+        durationMs: 1
+      })
+    } as unknown as WebRconClient;
+    const restartScheduler = {
+      getStatus: () => ({ scheduled: false, runAt: null, reason: null }),
+      schedule: (delayMinutes: number, reason: string | null) => ({
+        scheduled: true,
+        runAt: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
+        reason
+      }),
+      cancel: () => ({ scheduled: false, runAt: null, reason: null })
+    } as unknown as RestartScheduler;
     app.use(
       "/api",
       createApiRouter({
@@ -221,6 +269,8 @@ describe("setup-gated API actions", () => {
         logger: f.logger,
         installer,
         processManager,
+        webRcon,
+        restartScheduler,
         panelUrl: "http://127.0.0.1:40120"
       })
     );
@@ -280,6 +330,26 @@ describe("setup-gated API actions", () => {
       install: async () => undefined,
       update: async () => undefined
     } as unknown as InstallManager;
+    const webRcon = {
+      getStatus: () => ({ state: "disconnected", endpoint: null, connectedAt: null, lastError: null, pendingCommands: 0 }),
+      connect: async () => undefined,
+      sendCommand: async (_settings: unknown, command: string) => ({
+        command,
+        message: "ok",
+        identifier: 1,
+        type: "Generic",
+        durationMs: 1
+      })
+    } as unknown as WebRconClient;
+    const restartScheduler = {
+      getStatus: () => ({ scheduled: false, runAt: null, reason: null }),
+      schedule: (delayMinutes: number, reason: string | null) => ({
+        scheduled: true,
+        runAt: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
+        reason
+      }),
+      cancel: () => ({ scheduled: false, runAt: null, reason: null })
+    } as unknown as RestartScheduler;
     app.use(
       "/api",
       createApiRouter({
@@ -288,6 +358,8 @@ describe("setup-gated API actions", () => {
         logger: f.logger,
         installer,
         processManager,
+        webRcon,
+        restartScheduler,
         panelUrl: "http://127.0.0.1:40120"
       })
     );

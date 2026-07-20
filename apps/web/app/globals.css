@@ -427,6 +427,10 @@ textarea {
   font-size: 13px;
 }
 
+.console-tools {
+  margin-top: 14px;
+}
+
 .install-progress {
   position: relative;
   height: 8px;

@@ -5,6 +5,7 @@
 ### Added
 
 - Added a Windows portable packaging script that creates a ZIP with `RustPilot.exe`, bundled Node runtime, production backend, static web panel, and runtime dependencies.
+- Added Phase 2 WebRCON support for reliable command execution, WebRCON status, server info/player queries, announcements, kick/ban actions, and scheduled restarts.
 
 ## v0.1.0-alpha.2
 

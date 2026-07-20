@@ -99,7 +99,7 @@ Absolute user paths are not hardcoded. SteamCMD is downloaded only from Valve's 
 - Windows 10/11 x64 only.
 - Local web panel only.
 - One server profile.
-- Console commands are written to stdin of the child process; reliable remote command execution through WebRCON is planned for phase 2.
+- Console commands use WebRCON when the Rust server is running, with stdin fallback for local process shutdown.
 - No player list, backups, wipe planner, plugin management, or remote account system yet.
 - Portable ZIP release, not a single standalone `.exe`. Keep `RustPilot.exe`, `runtime/`, and `app/` together.
 

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import type { ConsoleEvent } from "@rustpilot/shared/browser";
+import type { ConsoleEvent, RconStatus, ScheduledRestartStatus } from "@rustpilot/shared/browser";
 import { api } from "./api";
 import { buildWebSocketUrl, type WebSocketConnectionState } from "./ws";
 
@@ -9,6 +9,8 @@ export interface StatusData {
   setup: any;
   paths: any;
   settings: any;
+  rcon?: RconStatus;
+  scheduledRestart?: ScheduledRestartStatus;
   redactedLaunchArgs: string[];
   websocket?: { path: string; url: string };
   installRunning: boolean;

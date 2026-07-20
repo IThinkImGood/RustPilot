@@ -7,6 +7,8 @@ import type { EventLogger } from "./logger.js";
 import type { InstallManager } from "./installManager.js";
 import type { ServerProcessManager } from "./serverProcessManager.js";
 import type { Storage } from "./storage.js";
+import type { WebRconClient } from "./webRconClient.js";
+import type { RestartScheduler } from "./restartScheduler.js";
 import { computeSetupStatus } from "./setupStatus.js";
 import { validateInstallDirectory, type InstallDirectoryChoice } from "./installDirectoryValidation.js";
 
@@ -34,12 +36,38 @@ function removeDirectory(directory: string): void {
   fs.rmSync(directory, { recursive: true, force: true });
 }
 
+function rejectIfRconUnavailable(deps: { storage: Storage; adapter: RustAdapter; processManager: ServerProcessManager }, res: express.Response): boolean {
+  const setup = computeSetupStatus(deps.storage, deps.adapter);
+  if (!setup.setupCompleted) {
+    rejectIncompleteSetup(res);
+    return true;
+  }
+  if (deps.processManager.getStatus().processState !== "running") {
+    res.status(409).json(fail("SERVER_NOT_RUNNING", "Start the Rust server before using WebRCON."));
+    return true;
+  }
+  return false;
+}
+
+function rconQuote(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function simpleText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > maxLength || /[\r\n]/.test(trimmed)) return null;
+  return trimmed;
+}
+
 export function createApiRouter(deps: {
   storage: Storage;
   adapter: RustAdapter;
   logger: EventLogger;
   installer: InstallManager;
   processManager: ServerProcessManager;
+  webRcon: WebRconClient;
+  restartScheduler: RestartScheduler;
   panelUrl: string;
 }): express.Router {
   const router = express.Router();
@@ -74,6 +102,8 @@ export function createApiRouter(deps: {
         },
         settings: { ...settings, rconPassword: "" },
         redactedLaunchArgs: deps.adapter.generateRedactedLaunchArguments(settings),
+        rcon: deps.webRcon.getStatus(),
+        scheduledRestart: deps.restartScheduler.getStatus(),
         websocket: {
           path: "/ws",
           url: deps.panelUrl.replace(/^http/, "ws") + "/ws"
@@ -185,7 +215,7 @@ export function createApiRouter(deps: {
       res.status(409).json(fail("SERVER_RESTART_FAILED", error instanceof Error ? error.message : String(error)));
     }
   });
-  router.post("/server/command", (req, res) => {
+  router.post("/server/command", async (req, res) => {
     const setup = computeSetupStatus(deps.storage, deps.adapter);
     if (!setup.setupCompleted) {
       rejectIncompleteSetup(res);
@@ -197,11 +227,102 @@ export function createApiRouter(deps: {
       return;
     }
     try {
-      deps.processManager.sendConsoleCommand(parsed.data.command);
+      await deps.processManager.sendConsoleCommand(deps.storage.getSettings(), parsed.data.command);
       res.json(ok({ sent: true }));
     } catch (error) {
       res.status(409).json(fail("COMMAND_UNAVAILABLE", error instanceof Error ? error.message : String(error)));
     }
+  });
+  router.get("/rcon/status", (_req, res) => {
+    res.json(ok(deps.webRcon.getStatus()));
+  });
+  router.post("/rcon/connect", async (_req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    try {
+      await deps.webRcon.connect(deps.storage.getSettings());
+      res.json(ok(deps.webRcon.getStatus()));
+    } catch (error) {
+      res.status(409).json(fail("RCON_CONNECT_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/server-info", async (_req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), "serverinfo")));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/players", async (_req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), "playerlist")));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/say", async (req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    const message = simpleText(req.body?.message, 200);
+    if (!message) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Announcement must be 1-200 characters."));
+      return;
+    }
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), `say ${rconQuote(message)}`)));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/kick", async (req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    const player = simpleText(req.body?.player, 80);
+    const reasonRaw = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!player || reasonRaw.length > 160 || /[\r\n]/.test(reasonRaw)) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Player is required and reason must be at most 160 characters."));
+      return;
+    }
+    const command = reasonRaw ? `kick ${rconQuote(player)} ${rconQuote(reasonRaw)}` : `kick ${rconQuote(player)}`;
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), command)));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/ban", async (req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    const player = simpleText(req.body?.player, 80);
+    const reasonRaw = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!player || reasonRaw.length > 160 || /[\r\n]/.test(reasonRaw)) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Player is required and reason must be at most 160 characters."));
+      return;
+    }
+    const command = reasonRaw ? `ban ${rconQuote(player)} ${rconQuote(reasonRaw)}` : `ban ${rconQuote(player)}`;
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), command)));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.get("/scheduler/restart", (_req, res) => {
+    res.json(ok(deps.restartScheduler.getStatus()));
+  });
+  router.post("/scheduler/restart", (req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    const delayMinutes = Number(req.body?.delayMinutes);
+    const reasonRaw = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (reasonRaw.length > 160 || /[\r\n]/.test(reasonRaw)) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Reason must be at most 160 characters."));
+      return;
+    }
+    try {
+      res.json(ok(deps.restartScheduler.schedule(delayMinutes, reasonRaw || null)));
+    } catch (error) {
+      res.status(400).json(fail("VALIDATION_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/scheduler/restart/cancel", (_req, res) => {
+    res.json(ok(deps.restartScheduler.cancel()));
   });
   router.post("/admin/wipe-server", async (req, res) => {
     const setup = computeSetupStatus(deps.storage, deps.adapter);
