@@ -1,4 +1,4 @@
-const protectedPaths = new Set(["/dashboard", "/console", "/settings"]);
+const protectedPaths = new Set(["/dashboard", "/console", "/settings", "/cfg-editor"]);
 
 export function getSetupRedirectTarget(pathname: string, setupCompleted: boolean): string | null {
   const normalized = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;

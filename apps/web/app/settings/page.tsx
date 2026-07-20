@@ -119,7 +119,6 @@ export default function SettingsPage() {
   }
   return (
     <ProtectedPage status={guard.status} error={guard.error} loading={guard.loading} onRetry={guard.refresh}>
-      <div className="topbar"><h1>Settings</h1></div>
       <form className="panel" onSubmit={submit}>
         <div className="form">
           <label>Hostname<input value={form.hostname} onChange={(e) => set("hostname", e.target.value)} /></label>

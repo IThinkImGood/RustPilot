@@ -13,4 +13,8 @@ describe("route setup guard decisions", () => {
   it("allows dashboard when setup is complete", () => {
     expect(getSetupRedirectTarget("/dashboard", true)).toBeNull();
   });
+
+  it("blocks cfg editor when setup is incomplete", () => {
+    expect(getSetupRedirectTarget("/cfg-editor", false)).toBe("/setup");
+  });
 });

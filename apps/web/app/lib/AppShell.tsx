@@ -1,4 +1,6 @@
 "use client";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faFileCode, faGear, faGaugeHigh, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -15,6 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setupCompleted = status?.setup?.setupCompleted === true;
   const mode = getAppLayoutMode({ loading, hasError: Boolean(error), setupCompleted });
   const redirectTarget = shouldRedirectForSetup(pathname, setupCompleted);
+  const activePath = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
 
   useEffect(() => {
     if (!loading && !error && redirectTarget && redirectTarget !== pathname) {
@@ -64,13 +67,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <>
       <DirectDevPortRedirect />
       <div className="shell">
+        <header className="app-header">
+          <Link className="app-header-brand" href="/dashboard">RustPilot</Link>
+          <div className="top-nav">
+            <Link href="/cfg-editor" className={activePath === "/cfg-editor" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faFileCode} fixedWidth />
+              <span>CFG Editor</span>
+            </Link>
+          </div>
+        </header>
         <nav className="nav">
-          <div className="brand">RustPilot</div>
           <div className="nav-links">
-            <Link href="/dashboard">Dashboard</Link>
-            <Link href="/console">Console</Link>
-            <Link href="/settings">Settings</Link>
-            {!setupCompleted && <Link href="/setup">Setup</Link>}
+            <Link href="/dashboard" className={activePath === "/dashboard" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faGaugeHigh} fixedWidth />
+              <span>Dashboard</span>
+            </Link>
+            <Link href="/console" className={activePath === "/console" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faTerminal} fixedWidth />
+              <span>Console</span>
+            </Link>
+            <Link href="/settings" className={activePath === "/settings" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faGear} fixedWidth />
+              <span>Settings</span>
+            </Link>
+            {!setupCompleted && (
+              <Link href="/setup" className={activePath === "/setup" ? "active" : undefined}>
+                <FontAwesomeIcon className="nav-link-icon" icon={faWrench} fixedWidth />
+                <span>Setup</span>
+              </Link>
+            )}
           </div>
           <ServerControlsPanel status={status} refresh={refresh} />
         </nav>
