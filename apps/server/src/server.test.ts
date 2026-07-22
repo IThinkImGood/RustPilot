@@ -2,9 +2,10 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import express from "express";
 import { WebSocketServer } from "ws";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import AdmZip from "adm-zip";
 import { describe, expect, it } from "vitest";
 import { defaultServerSettings } from "@rustpilot/shared";
 import { RustAdapter, ensureRuntimeDirectories } from "@rustpilot/rust-adapter";
@@ -19,6 +20,7 @@ import { createApiRouter } from "./api.js";
 import { validateInstallDirectory } from "./installDirectoryValidation.js";
 import { WebRconClient } from "./webRconClient.js";
 import { buildRestartAnnouncementCommand, nextDailyRunAt, restartAnnouncementMinutes, RestartScheduler } from "./restartScheduler.js";
+import { BackupScheduler, nextBackupRunAt } from "./backupScheduler.js";
 
 class FakeChild extends EventEmitter {
   stdout = new PassThrough();
@@ -195,6 +197,14 @@ describe("RestartScheduler", () => {
   });
 });
 
+describe("BackupScheduler", () => {
+  it("calculates the next local backup time", () => {
+    const now = new Date(2026, 6, 22, 7, 30, 0, 0);
+    expect(nextBackupRunAt(["06:00", "14:00"], now)).toEqual(new Date(2026, 6, 22, 14, 0, 0, 0));
+    expect(nextBackupRunAt(["06:00"], now)).toEqual(new Date(2026, 6, 23, 6, 0, 0, 0));
+  });
+});
+
 describe("WebRconClient", () => {
   it("sends JSON commands and matches responses by identifier", async () => {
     const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
@@ -348,6 +358,24 @@ describe("setup-gated API actions", () => {
       }),
       cancel: () => ({ scheduled: false, runAt: null, reason: null })
     } as unknown as RestartScheduler;
+    const backupScheduler = {
+      getStatus: () => ({
+        scheduled: false,
+        runAt: null,
+        schedule: { enabled: false, times: [], retentionCount: 20 },
+        lastBackupAt: null,
+        lastBackupFileName: null,
+        lastError: null
+      }),
+      saveSchedule: (schedule: { enabled: boolean; times: string[]; retentionCount: number }) => ({
+        scheduled: schedule.enabled,
+        runAt: schedule.enabled ? new Date(Date.now() + 60_000).toISOString() : null,
+        schedule,
+        lastBackupAt: null,
+        lastBackupFileName: null,
+        lastError: null
+      })
+    } as unknown as BackupScheduler;
     app.use(
       "/api",
       createApiRouter({
@@ -358,6 +386,7 @@ describe("setup-gated API actions", () => {
         processManager,
         webRcon,
         restartScheduler,
+        backupScheduler,
         panelUrl: "http://127.0.0.1:40815"
       })
     );
@@ -399,6 +428,15 @@ describe("setup-gated API actions", () => {
     });
   });
 
+  it("rejects manual backups when setup is incomplete", async () => {
+    const response = await request("/backups", { method: "POST", body: "{}" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: "SETUP_INCOMPLETE" }
+    });
+  });
+
   it("allows install endpoint during setup", async () => {
     const response = await request("/install", {
       method: "POST",
@@ -437,6 +475,24 @@ describe("setup-gated API actions", () => {
       }),
       cancel: () => ({ scheduled: false, runAt: null, reason: null })
     } as unknown as RestartScheduler;
+    const backupScheduler = {
+      getStatus: () => ({
+        scheduled: false,
+        runAt: null,
+        schedule: { enabled: false, times: [], retentionCount: 20 },
+        lastBackupAt: null,
+        lastBackupFileName: null,
+        lastError: null
+      }),
+      saveSchedule: (schedule: { enabled: boolean; times: string[]; retentionCount: number }) => ({
+        scheduled: schedule.enabled,
+        runAt: schedule.enabled ? new Date(Date.now() + 60_000).toISOString() : null,
+        schedule,
+        lastBackupAt: null,
+        lastBackupFileName: null,
+        lastError: null
+      })
+    } as unknown as BackupScheduler;
     app.use(
       "/api",
       createApiRouter({
@@ -447,6 +503,7 @@ describe("setup-gated API actions", () => {
         processManager,
         webRcon,
         restartScheduler,
+        backupScheduler,
         panelUrl: "http://127.0.0.1:40815"
       })
     );
@@ -560,6 +617,24 @@ describe("setup-gated API actions", () => {
       }),
       cancel: () => ({ scheduled: false, runAt: null, reason: null })
     } as unknown as RestartScheduler;
+    const backupScheduler = {
+      getStatus: () => ({
+        scheduled: false,
+        runAt: null,
+        schedule: { enabled: false, times: [], retentionCount: 20 },
+        lastBackupAt: null,
+        lastBackupFileName: null,
+        lastError: null
+      }),
+      saveSchedule: (schedule: { enabled: boolean; times: string[]; retentionCount: number }) => ({
+        scheduled: schedule.enabled,
+        runAt: schedule.enabled ? new Date(Date.now() + 60_000).toISOString() : null,
+        schedule,
+        lastBackupAt: null,
+        lastBackupFileName: null,
+        lastError: null
+      })
+    } as unknown as BackupScheduler;
     const app = express();
     app.use(
       "/api",
@@ -571,6 +646,7 @@ describe("setup-gated API actions", () => {
         processManager,
         webRcon,
         restartScheduler,
+        backupScheduler,
         panelUrl: "http://127.0.0.1:40815"
       })
     );
@@ -639,6 +715,90 @@ describe("setup-gated API actions", () => {
         data: {
           kind: "daily",
           schedule: { enabled: true, times: ["06:00", "14:00"], reason: "daily restart" }
+        }
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("creates and lists manual backups after setup", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    const rustIdentityDir = path.join(f.paths.serverDir, "server", defaultServerSettings.identity);
+    mkdirSync(rustIdentityDir, { recursive: true });
+    writeFileSync(path.join(rustIdentityDir, "save.dat"), "world");
+    const cfgDir = path.join(rustIdentityDir, "cfg");
+    mkdirSync(cfgDir, { recursive: true });
+    writeFileSync(path.join(cfgDir, "server.cfg"), 'server.hostname "RustPilot Test"\n');
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const createResponse = await fetch(`${baseUrl}/backups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      expect(createResponse.status).toBe(201);
+      const created = await createResponse.json();
+      expect(created).toMatchObject({
+        success: true,
+        data: {
+          identity: defaultServerSettings.identity
+        }
+      });
+      expect(existsSync(created.data.path)).toBe(true);
+      const entries = new AdmZip(created.data.path).getEntries().map((entry) => entry.entryName);
+      expect(entries).toContain("server/default/save.dat");
+      expect(entries).toContain("server/default/cfg/server.cfg");
+      expect(entries).toContain("rustpilot-backup.json");
+
+      const listResponse = await fetch(`${baseUrl}/backups`);
+      expect(listResponse.status).toBe(200);
+      const listed = await listResponse.json();
+      expect(listed.data[0]).toMatchObject({ fileName: created.data.fileName });
+
+      const deleteTraversalResponse = await fetch(`${baseUrl}/backups/..%2F${created.data.fileName}`, {
+        method: "DELETE"
+      });
+      expect(deleteTraversalResponse.status).toBe(404);
+      expect(existsSync(created.data.path)).toBe(true);
+
+      const deleteResponse = await fetch(`${baseUrl}/backups/${encodeURIComponent(created.data.fileName)}`, {
+        method: "DELETE"
+      });
+      expect(deleteResponse.status).toBe(200);
+      expect(existsSync(created.data.path)).toBe(false);
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("saves automatic backup schedules after setup", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/backups/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true, times: ["03:00", "15:00"], retentionCount: 12 })
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        success: true,
+        data: {
+          scheduled: true,
+          schedule: { enabled: true, times: ["03:00", "15:00"], retentionCount: 12 }
         }
       });
     } finally {

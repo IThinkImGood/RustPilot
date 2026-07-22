@@ -3,7 +3,9 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   defaultServerSettings,
+  backupScheduleSchema,
   restartScheduleSchema,
+  type BackupScheduleConfig,
   serverSettingsSchema,
   type InstallationState,
   type RestartScheduleConfig,
@@ -75,6 +77,7 @@ export class Storage {
     this.db.prepare("DELETE FROM settings WHERE id = 'default'").run();
     this.clearScheduledRestart();
     this.saveRestartSchedule({ enabled: false, times: [], reason: null });
+    this.saveBackupSchedule({ enabled: false, times: [], retentionCount: 20 });
     this.db
       .prepare(
         "UPDATE runtime SET installation_state = 'not_configured', setup_completed = 0, install_error = NULL, last_start = NULL, last_stop = NULL, last_exit_code = NULL, last_signal = NULL, last_crash_at = NULL WHERE id = 1"
@@ -186,6 +189,37 @@ export class Storage {
     };
     this.db
       .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('restart_schedule', ?)")
+      .run(JSON.stringify(normalized));
+    return normalized;
+  }
+
+  getBackupSchedule(): BackupScheduleConfig {
+    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'backup_schedule'").get() as
+      | { value: string }
+      | undefined;
+    if (!row) return { enabled: false, times: [], retentionCount: 20 };
+    try {
+      const parsed = backupScheduleSchema.safeParse(JSON.parse(row.value));
+      if (!parsed.success) return { enabled: false, times: [], retentionCount: 20 };
+      return {
+        enabled: parsed.data.enabled,
+        times: [...new Set(parsed.data.times)].sort(),
+        retentionCount: parsed.data.retentionCount
+      };
+    } catch {
+      return { enabled: false, times: [], retentionCount: 20 };
+    }
+  }
+
+  saveBackupSchedule(schedule: BackupScheduleConfig): BackupScheduleConfig {
+    const parsed = backupScheduleSchema.parse(schedule);
+    const normalized = {
+      enabled: parsed.enabled,
+      times: [...new Set(parsed.times)].sort(),
+      retentionCount: parsed.retentionCount
+    };
+    this.db
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('backup_schedule', ?)")
       .run(JSON.stringify(normalized));
     return normalized;
   }

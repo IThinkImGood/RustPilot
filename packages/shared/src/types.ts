@@ -96,6 +96,29 @@ export interface UsageMetrics {
   history: UsageHistoryPoint[];
 }
 
+export interface BackupSummary {
+  fileName: string;
+  path: string;
+  createdAt: string;
+  sizeBytes: number;
+  identity: string;
+}
+
+export interface BackupScheduleConfig {
+  enabled: boolean;
+  times: string[];
+  retentionCount: number;
+}
+
+export interface BackupScheduleStatus {
+  scheduled: boolean;
+  runAt: string | null;
+  schedule: BackupScheduleConfig;
+  lastBackupAt: string | null;
+  lastBackupFileName: string | null;
+  lastError: string | null;
+}
+
 export interface SetupStatus {
   completed: boolean;
   setupCompleted?: boolean;

@@ -1,6 +1,6 @@
 # RustPilot Current Status
 
-Last updated: 2026-07-18
+Last updated: 2026-07-22
 
 ## Current State
 
@@ -32,6 +32,7 @@ http://127.0.0.1:3001
 - RustPilot uses the chosen install directory for SteamCMD, server files, identity data, backups, and logs.
 - The RustPilot database remains in the app runtime folder.
 - Installation can only start after server-side install directory validation.
+- The Backups top-nav dropdown links to separate Manual and Automatic backup pages for Rust identity data and cfg files.
 
 ## Install Directory Validation
 
@@ -80,6 +81,8 @@ apps/server/src/api.ts
 apps/server/src/index.ts
 apps/server/src/setupStatus.ts
 apps/server/src/installDirectoryValidation.ts
+apps/server/src/backups.ts
+apps/server/src/backupScheduler.ts
 apps/server/src/websocket.ts
 ```
 
@@ -104,8 +107,8 @@ npm run build
 Current test count:
 
 ```text
-12 test files passed
-56 tests passed
+14 test files passed
+87 tests passed
 ```
 
 `npm run lint` currently reports existing `any` warnings, but no errors.

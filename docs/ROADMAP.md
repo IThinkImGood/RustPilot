@@ -17,7 +17,8 @@
 
 ## Phase 3
 
-- Automatic backups
+- Manual backups: implemented
+- Automatic backups: implemented
 - Wipe planner
 - Map and blueprint wipes
 - New seeds

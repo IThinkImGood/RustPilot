@@ -15,6 +15,7 @@ import { InstallManager } from "./installManager.js";
 import { ServerProcessManager } from "./serverProcessManager.js";
 import { WebRconClient } from "./webRconClient.js";
 import { RestartScheduler } from "./restartScheduler.js";
+import { BackupScheduler } from "./backupScheduler.js";
 import { MetricsCollector } from "./metricsCollector.js";
 import { createApiRouter } from "./api.js";
 import { attachWebSocketServer } from "./websocket.js";
@@ -50,12 +51,13 @@ const installer = new InstallManager(adapter, storage, logger, runner);
 const webRcon = new WebRconClient(logger);
 const processManager = new ServerProcessManager(adapter, storage, logger, runner, webRcon);
 const restartScheduler = new RestartScheduler(storage, processManager, logger);
+const backupScheduler = new BackupScheduler(storage, adapter, logger);
 const metrics = new MetricsCollector(processManager);
 metrics.start();
 
 const app = express();
 app.disable("x-powered-by");
-app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, metrics, panelUrl }));
+app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, backupScheduler, metrics, panelUrl }));
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const webOutCandidates = [
@@ -106,6 +108,7 @@ function closeStartupResources(exitCode: number): void {
     // The server may not have started listening yet.
   }
   metrics.stop();
+  backupScheduler.stop();
   storage.close();
   lock.release();
   process.exit(exitCode);
@@ -207,6 +210,7 @@ async function shutdown(): Promise<void> {
     server.close();
     rl.close();
     metrics.stop();
+    backupScheduler.stop();
     storage.close();
     lock.release();
     process.exit(0);

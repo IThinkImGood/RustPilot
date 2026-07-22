@@ -4,7 +4,7 @@ RustPilot is an open-source management app for a local Rust Dedicated Server on 
 
 ## Project Status
 
-`v0.1.0-alpha.5` is an early preview that is usable for local testing and early adopters. Core functionality is present: first-run setup, install directory selection, SteamCMD download, Rust Dedicated Server installation through Steam app `258550`, SQLite settings, WebSockets, live console output, process management, WebRCON admin tools, CFG editing, scheduled restarts, and a portable Windows ZIP with `RustPilot.exe`.
+`v0.1.0-alpha.5` is an early preview that is usable for local testing and early adopters. Core functionality is present: first-run setup, install directory selection, SteamCMD download, Rust Dedicated Server installation through Steam app `258550`, SQLite settings, WebSockets, live console output, process management, WebRCON admin tools, CFG editing, scheduled restarts, manual/automatic backups, and a portable Windows ZIP with `RustPilot.exe`.
 
 Do not use this version for unattended production hosting yet. Expect rough edges and test your install path before using existing server files.
 
@@ -100,7 +100,7 @@ Absolute user paths are not hardcoded. SteamCMD is downloaded only from Valve's 
 - Local web panel only.
 - One server profile.
 - Console commands use WebRCON when the Rust server is running, with stdin fallback for local process shutdown.
-- No player list, backups, wipe planner, plugin management, or remote account system yet.
+- No wipe planner, plugin management, or remote account system yet.
 - Portable ZIP release, not a single standalone `.exe`. Keep `RustPilot.exe`, `runtime/`, and `app/` together.
 
 ## Security

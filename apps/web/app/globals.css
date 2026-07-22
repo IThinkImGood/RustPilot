@@ -106,6 +106,39 @@ a {
   color: var(--rust-accent-strong);
 }
 
+.top-nav-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.top-nav-menu {
+  position: absolute;
+  top: calc(100% - 8px);
+  left: 0;
+  z-index: 40;
+  display: none;
+  min-width: 180px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: #1d1f23;
+  padding: 6px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.top-nav-dropdown:hover .top-nav-menu,
+.top-nav-dropdown:focus-within .top-nav-menu {
+  display: grid;
+  gap: 4px;
+}
+
+.top-nav-menu a {
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
 .nav {
   grid-area: nav;
   min-height: 0;
@@ -912,6 +945,141 @@ label {
   padding: 0;
   border-radius: 999px;
   font-size: 12px;
+}
+
+.backups-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.backups-page-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  height: calc(100vh - 108px);
+  overflow: hidden;
+}
+
+.backups-page-panel.manual-only {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.backups-page-panel.automatic-only {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.backups-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.backups-header h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.backups-header p {
+  margin: 0;
+}
+
+.backups-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.backup-schedule-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel-2);
+  padding: 12px;
+}
+
+.backup-schedule-panel.standalone {
+  align-content: start;
+}
+
+.backup-schedule-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.backup-schedule-heading h3,
+.backup-schedule-heading p {
+  margin: 0;
+}
+
+.backup-schedule-heading h3 {
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+.backup-schedule-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) auto minmax(160px, 220px);
+  align-items: end;
+  gap: 10px;
+}
+
+.backup-schedule-grid button {
+  min-height: 39px;
+}
+
+.backup-empty {
+  margin: 0;
+  padding: 14px;
+}
+
+.backup-list-shell {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel-2);
+  padding: 8px;
+}
+
+.backup-list {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.backup-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.9fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: #202126;
+  padding: 10px 12px;
+}
+
+.backup-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.backup-row strong,
+.backup-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-row span {
+  color: var(--admin-muted);
+  font-size: 13px;
 }
 
 .cfg-editor-panel {
@@ -1781,6 +1949,16 @@ textarea {
     grid-template-columns: 1fr;
   }
   .server-files-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .backups-header,
+  .backup-schedule-heading,
+  .backup-schedule-grid,
+  .backup-row {
+    grid-template-columns: 1fr;
+  }
+  .backups-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }

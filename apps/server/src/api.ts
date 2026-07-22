@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
-import { commandRequestSchema, restartScheduleSchema, settingsUpdateSchema } from "@rustpilot/shared";
+import { backupScheduleSchema, commandRequestSchema, restartScheduleSchema, settingsUpdateSchema } from "@rustpilot/shared";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
 import { openBrowser } from "./browser.js";
 import type { EventLogger } from "./logger.js";
@@ -11,9 +11,11 @@ import type { Storage } from "./storage.js";
 import type { WebRconClient } from "./webRconClient.js";
 import type { RestartScheduler } from "./restartScheduler.js";
 import type { MetricsCollector } from "./metricsCollector.js";
+import type { BackupScheduler } from "./backupScheduler.js";
 import { computeSetupStatus } from "./setupStatus.js";
 import { validateInstallDirectory, type InstallDirectoryChoice } from "./installDirectoryValidation.js";
 import { CFG_FILES, ensureDefaultCfgFiles, getCfgDirectory, getCfgPath } from "./cfgFiles.js";
+import { createManualBackup, deleteManualBackup, listManualBackups } from "./backups.js";
 
 function ok<T>(data: T) {
   return { success: true as const, data };
@@ -85,6 +87,7 @@ export function createApiRouter(deps: {
   processManager: ServerProcessManager;
   webRcon: WebRconClient;
   restartScheduler: RestartScheduler;
+  backupScheduler: BackupScheduler;
   metrics?: MetricsCollector;
   panelUrl: string;
 }): express.Router {
@@ -302,6 +305,47 @@ export function createApiRouter(deps: {
     fs.writeFileSync(filePath, content, "utf8");
     deps.logger.emit("rustpilot", "system", "info", `Saved cfg file: ${req.params.fileName}`);
     res.json(ok({ name: req.params.fileName, content, exists: true }));
+  });
+  router.get("/backups", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    res.json(ok(listManualBackups(deps.adapter, deps.storage.getSettings())));
+  });
+  router.post("/backups", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    if (deps.installer.isRunning()) {
+      res.status(409).json(fail("INSTALL_RUNNING", "Wait until the current installation or update finishes."));
+      return;
+    }
+    try {
+      const backup = createManualBackup(deps.adapter, deps.storage.getSettings());
+      deps.logger.emit("rustpilot", "system", "info", `Manual backup created: ${backup.fileName}`);
+      res.status(201).json(ok(backup));
+    } catch (error) {
+      res.status(500).json(fail("BACKUP_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.delete("/backups/:fileName", (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const deleted = deleteManualBackup(deps.adapter, deps.storage.getSettings(), req.params.fileName);
+    if (!deleted) {
+      res.status(404).json(fail("BACKUP_NOT_FOUND", "Backup was not found."));
+      return;
+    }
+    deps.logger.emit("rustpilot", "system", "warn", `Manual backup deleted: ${deleted.fileName}`);
+    res.json(ok({ deleted: true, backup: deleted }));
+  });
+  router.get("/backups/schedule", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    res.json(ok(deps.backupScheduler.getStatus()));
+  });
+  router.put("/backups/schedule", (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const parsed = backupScheduleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Backup schedule is invalid.", parsed.error.flatten()));
+      return;
+    }
+    res.json(ok(deps.backupScheduler.saveSchedule(parsed.data)));
   });
   router.get("/rcon/status", (_req, res) => {
     res.json(ok(deps.webRcon.getStatus()));

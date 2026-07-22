@@ -104,4 +104,26 @@ export const restartScheduleSchema = z.object({
   }
 });
 
+export const backupScheduleSchema = z.object({
+  enabled: z.boolean(),
+  times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm time.")).max(12),
+  retentionCount: z.coerce.number().int().min(1).max(200).default(20)
+}).superRefine((schedule, ctx) => {
+  if (schedule.enabled && schedule.times.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["times"],
+      message: "Add at least one backup time."
+    });
+  }
+  const uniqueTimes = new Set(schedule.times);
+  if (uniqueTimes.size !== schedule.times.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["times"],
+      message: "Backup times must be unique."
+    });
+  }
+});
+
 export const settingsUpdateSchema = serverSettingsSchema;

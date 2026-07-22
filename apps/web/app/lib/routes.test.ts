@@ -17,4 +17,10 @@ describe("route setup guard decisions", () => {
   it("blocks cfg editor when setup is incomplete", () => {
     expect(getSetupRedirectTarget("/cfg-editor", false)).toBe("/setup");
   });
+
+  it("blocks backups when setup is incomplete", () => {
+    expect(getSetupRedirectTarget("/backups", false)).toBe("/setup");
+    expect(getSetupRedirectTarget("/backups/manual", false)).toBe("/setup");
+    expect(getSetupRedirectTarget("/backups/automatic", false)).toBe("/setup");
+  });
 });

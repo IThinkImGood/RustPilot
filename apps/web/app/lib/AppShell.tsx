@@ -1,6 +1,6 @@
 "use client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFileCode, faGear, faGaugeHigh, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBoxArchive, faClockRotateLeft, faFileCode, faGear, faGaugeHigh, faHand, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -18,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mode = getAppLayoutMode({ loading, hasError: Boolean(error), setupCompleted });
   const redirectTarget = shouldRedirectForSetup(pathname, setupCompleted);
   const activePath = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
+  const backupsActive = activePath === "/backups" || activePath.startsWith("/backups/");
 
   useEffect(() => {
     if (!loading && !error && redirectTarget && redirectTarget !== pathname) {
@@ -78,6 +79,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <FontAwesomeIcon className="nav-link-icon" icon={faFileCode} fixedWidth />
               <span>CFG Editor</span>
             </Link>
+            <div className="top-nav-dropdown">
+              <Link href="/backups/manual" className={backupsActive ? "active" : undefined}>
+                <FontAwesomeIcon className="nav-link-icon" icon={faBoxArchive} fixedWidth />
+                <span>Backups</span>
+              </Link>
+              <div className="top-nav-menu">
+                <Link href="/backups/manual" className={activePath === "/backups/manual" ? "active" : undefined}>
+                  <FontAwesomeIcon className="nav-link-icon" icon={faHand} fixedWidth />
+                  <span>Manual</span>
+                </Link>
+                <Link href="/backups/automatic" className={activePath === "/backups/automatic" ? "active" : undefined}>
+                  <FontAwesomeIcon className="nav-link-icon" icon={faClockRotateLeft} fixedWidth />
+                  <span>Automatic</span>
+                </Link>
+              </div>
+            </div>
           </div>
         </header>
         <nav className="nav">
