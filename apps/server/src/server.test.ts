@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import AdmZip from "adm-zip";
 import { describe, expect, it } from "vitest";
-import { defaultServerSettings } from "@rustpilot/shared";
+import { defaultServerSettings, defaultWipePlannerConfig } from "@rustpilot/shared";
 import { RustAdapter, ensureRuntimeDirectories } from "@rustpilot/rust-adapter";
 import { EventLogger } from "./logger.js";
 import { Storage } from "./storage.js";
@@ -21,6 +21,7 @@ import { validateInstallDirectory } from "./installDirectoryValidation.js";
 import { WebRconClient } from "./webRconClient.js";
 import { buildRestartAnnouncementCommand, nextDailyRunAt, restartAnnouncementMinutes, RestartScheduler } from "./restartScheduler.js";
 import { BackupScheduler, nextBackupRunAt } from "./backupScheduler.js";
+import { WipePlanner, computeNextMonthlyWipeTagRunAt, computeNextOfficialForceWipe, computeNextWeeklyRunAt, wipeRustFiles } from "./wipePlanner.js";
 
 class FakeChild extends EventEmitter {
   stdout = new PassThrough();
@@ -205,6 +206,143 @@ describe("BackupScheduler", () => {
   });
 });
 
+describe("WipePlanner", () => {
+  it("calculates the next weekly wipe time", () => {
+    const wednesdayMorning = new Date(2026, 6, 22, 7, 30, 0, 0);
+    expect(computeNextWeeklyRunAt(3, "14:00", wednesdayMorning)).toEqual(new Date(2026, 6, 22, 14, 0, 0, 0));
+    expect(computeNextWeeklyRunAt(3, "06:00", wednesdayMorning)).toEqual(new Date(2026, 6, 29, 6, 0, 0, 0));
+    expect(computeNextWeeklyRunAt(5, "06:00", wednesdayMorning)).toEqual(new Date(2026, 6, 24, 6, 0, 0, 0));
+    expect(computeNextWeeklyRunAt(3, "06:00", wednesdayMorning, 14)).toEqual(new Date(2026, 7, 5, 6, 0, 0, 0));
+  });
+
+  it("calculates the official Facepunch force wipe time", () => {
+    expect(computeNextOfficialForceWipe(new Date(Date.UTC(2026, 6, 1, 12, 0, 0, 0)))).toEqual(new Date(Date.UTC(2026, 6, 2, 18, 0, 0, 0)));
+    expect(computeNextOfficialForceWipe(new Date(Date.UTC(2026, 6, 3, 12, 0, 0, 0)))).toEqual(new Date(Date.UTC(2026, 7, 6, 18, 0, 0, 0)));
+  });
+
+  it("calculates custom monthly wipe tag times", () => {
+    expect(computeNextMonthlyWipeTagRunAt(4, "14:00", new Date(2026, 6, 1, 7, 30, 0, 0))).toEqual(new Date(2026, 6, 2, 14, 0, 0, 0));
+    expect(computeNextMonthlyWipeTagRunAt(1, "06:00", new Date(2026, 6, 22, 7, 30, 0, 0))).toEqual(new Date(2026, 7, 3, 6, 0, 0, 0));
+  });
+
+  it("removes map and blueprint files without deleting cfg files", () => {
+    const f = fixture();
+    try {
+      const rustIdentityDir = path.join(f.paths.serverDir, "server", defaultServerSettings.identity);
+      const cfgDir = path.join(rustIdentityDir, "cfg");
+      mkdirSync(cfgDir, { recursive: true });
+      writeFileSync(path.join(rustIdentityDir, "proceduralmap.4000.12345.250.map"), "map");
+      writeFileSync(path.join(rustIdentityDir, "proceduralmap.4000.12345.250.sav"), "save");
+      writeFileSync(path.join(rustIdentityDir, "player.blueprints.5.db"), "bp");
+      writeFileSync(path.join(cfgDir, "server.cfg"), "server.hostname test");
+
+      const removed = wipeRustFiles(f.adapter, defaultServerSettings.identity, defaultServerSettings.installDirectory, "map_and_blueprints");
+      expect(removed.length).toBe(3);
+      expect(existsSync(path.join(rustIdentityDir, "proceduralmap.4000.12345.250.map"))).toBe(false);
+      expect(existsSync(path.join(rustIdentityDir, "proceduralmap.4000.12345.250.sav"))).toBe(false);
+      expect(existsSync(path.join(rustIdentityDir, "player.blueprints.5.db"))).toBe(false);
+      expect(existsSync(path.join(cfgDir, "server.cfg"))).toBe(true);
+    } finally {
+      f.cleanup();
+    }
+  });
+
+  it("combines a custom wipe that falls inside the official force wipe window", () => {
+    const f = fixture();
+    const installer = {
+      isRunning: () => false,
+      install: async () => undefined,
+      update: async () => undefined
+    } as unknown as InstallManager;
+    const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const planner = new WipePlanner(f.storage, f.adapter, installer, processManager, f.logger);
+    try {
+      const officialRunAt = computeNextOfficialForceWipe();
+      const customRunAt = new Date(officialRunAt.getTime() + 60_000).toISOString();
+      const status = planner.saveConfig({
+        official: { ...defaultWipePlannerConfig.official, enabled: true, kind: "map" },
+        custom: {
+          ...defaultWipePlannerConfig.custom,
+          schedule: "one_time",
+          runAt: customRunAt,
+          kind: "blueprints"
+        },
+        conflictWindowMinutes: 180
+      });
+      expect(status.source).toBe("combined");
+      expect(status.customReplacedByOfficial).toBe(true);
+      expect(status.runAt).toBe(officialRunAt.toISOString());
+    } finally {
+      planner.stop();
+      f.cleanup();
+    }
+  });
+
+  it("requires SteamCMD update for official force wipes", () => {
+    const f = fixture();
+    const installer = {
+      isRunning: () => false,
+      install: async () => undefined,
+      update: async () => undefined
+    } as unknown as InstallManager;
+    const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const planner = new WipePlanner(f.storage, f.adapter, installer, processManager, f.logger);
+    try {
+      const status = planner.saveConfig({
+        official: { ...defaultWipePlannerConfig.official, enabled: true, updateBeforeWipe: false },
+        custom: { ...defaultWipePlannerConfig.custom },
+        conflictWindowMinutes: 180
+      });
+      expect(status.source).toBe("official");
+      expect(status.config.official.updateBeforeWipe).toBe(false);
+    } finally {
+      planner.stop();
+      f.cleanup();
+    }
+  });
+
+  it("stores a configured seed before restart after a map wipe", async () => {
+    const f = fixture();
+    const installer = {
+      isRunning: () => false,
+      install: async () => undefined,
+      update: async () => undefined
+    } as unknown as InstallManager;
+    const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
+    const rustIdentityDir = path.join(f.paths.serverDir, "server", defaultServerSettings.identity);
+    mkdirSync(rustIdentityDir, { recursive: true });
+    writeFileSync(path.join(rustIdentityDir, "proceduralmap.4000.12345.250.sav"), "save");
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const planner = new WipePlanner(f.storage, f.adapter, installer, processManager, f.logger);
+    try {
+      const result = await planner.runNow({
+        kind: "map",
+        reason: "seed test",
+        backupBeforeWipe: false,
+        restartAfterWipe: false,
+        seedMode: "set",
+        seed: 987654
+      });
+      expect(result.seed).toBe(987654);
+      expect(f.storage.getSettings().seed).toBe(987654);
+    } finally {
+      planner.stop();
+      f.cleanup();
+    }
+  });
+});
+
 describe("WebRconClient", () => {
   it("sends JSON commands and matches responses by identifier", async () => {
     const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
@@ -323,6 +461,56 @@ describe("computed setup status", () => {
 });
 
 describe("setup-gated API actions", () => {
+  function fakeWipePlanner() {
+    return {
+      getStatus: () => ({
+        scheduled: false,
+        runAt: null,
+        source: null,
+        officialRunAt: null,
+        customRunAt: null,
+        customReplacedByOfficial: false,
+        config: defaultWipePlannerConfig,
+        lastWipeAt: null,
+        lastResult: null,
+        lastError: null
+      }),
+      saveConfig: (config: typeof defaultWipePlannerConfig) => ({
+        scheduled: true,
+        runAt: new Date(Date.now() + 60_000).toISOString(),
+        source: "custom",
+        officialRunAt: null,
+        customRunAt: new Date(Date.now() + 60_000).toISOString(),
+        customReplacedByOfficial: false,
+        config,
+        lastWipeAt: null,
+        lastResult: null,
+        lastError: null
+      }),
+      cancelCustomSchedule: () => ({
+        scheduled: false,
+        runAt: null,
+        source: null,
+        officialRunAt: null,
+        customRunAt: null,
+        customReplacedByOfficial: false,
+        config: defaultWipePlannerConfig,
+        lastWipeAt: null,
+        lastResult: null,
+        lastError: null
+      }),
+      runNow: async (plan: { kind: string }) => ({
+        kind: plan.kind,
+        wipedAt: new Date().toISOString(),
+      source: "custom",
+      backupFileName: "rustpilot-backup-default-test.zip",
+      removedFiles: [],
+      steamCmdUpdated: false,
+      seed: null
+    })
+    } as unknown as WipePlanner;
+  }
+
   function createTestApi(f: ReturnType<typeof fixture>) {
     const app = express();
     const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
@@ -387,6 +575,7 @@ describe("setup-gated API actions", () => {
         webRcon,
         restartScheduler,
         backupScheduler,
+        wipePlanner: fakeWipePlanner(),
         panelUrl: "http://127.0.0.1:40815"
       })
     );
@@ -504,6 +693,7 @@ describe("setup-gated API actions", () => {
         webRcon,
         restartScheduler,
         backupScheduler,
+        wipePlanner: fakeWipePlanner(),
         panelUrl: "http://127.0.0.1:40815"
       })
     );
@@ -647,6 +837,7 @@ describe("setup-gated API actions", () => {
         webRcon,
         restartScheduler,
         backupScheduler,
+        wipePlanner: fakeWipePlanner(),
         panelUrl: "http://127.0.0.1:40815"
       })
     );
@@ -779,6 +970,56 @@ describe("setup-gated API actions", () => {
     }
   });
 
+  it("restores manual backups after explicit confirmation", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    const rustIdentityDir = path.join(f.paths.serverDir, "server", defaultServerSettings.identity);
+    mkdirSync(rustIdentityDir, { recursive: true });
+    writeFileSync(path.join(rustIdentityDir, "save.dat"), "original");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const createResponse = await fetch(`${baseUrl}/backups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      expect(createResponse.status).toBe(201);
+      const created = await createResponse.json();
+      writeFileSync(path.join(rustIdentityDir, "save.dat"), "changed");
+
+      const rejected = await fetch(`${baseUrl}/backups/${encodeURIComponent(created.data.fileName)}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "NO" })
+      });
+      expect(rejected.status).toBe(400);
+
+      const restoreResponse = await fetch(`${baseUrl}/backups/${encodeURIComponent(created.data.fileName)}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "RESTORE BACKUP" })
+      });
+      expect(restoreResponse.status).toBe(200);
+      const restored = await restoreResponse.json();
+      expect(restored).toMatchObject({
+        success: true,
+        data: {
+          sourceIdentity: defaultServerSettings.identity,
+          targetIdentity: defaultServerSettings.identity
+        }
+      });
+      expect(readFileSync(path.join(rustIdentityDir, "save.dat"), "utf8")).toBe("original");
+      expect(restored.data.safetyBackup.fileName).toMatch(/^rustpilot-backup-default-/);
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
   it("saves automatic backup schedules after setup", async () => {
     const f = fixture();
     writeFileSync(f.paths.steamCmdExe, "");
@@ -801,6 +1042,100 @@ describe("setup-gated API actions", () => {
           schedule: { enabled: true, times: ["03:00", "15:00"], retentionCount: 12 }
         }
       });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("schedules and runs wipe plans after setup", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const runAt = new Date(Date.now() + 60_000).toISOString();
+      const scheduleResponse = await fetch(`${baseUrl}/wipes/planner`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          official: { ...defaultWipePlannerConfig.official, enabled: true, kind: "map" },
+          custom: {
+            ...defaultWipePlannerConfig.custom,
+            schedule: "one_time",
+            runAt,
+            kind: "map_and_blueprints",
+            reason: "one-time wipe",
+            backupBeforeWipe: true,
+            restartAfterWipe: false
+          },
+          conflictWindowMinutes: 180
+        })
+      });
+      expect(scheduleResponse.status).toBe(200);
+      expect(await scheduleResponse.json()).toMatchObject({
+        success: true,
+        data: {
+          scheduled: true,
+          config: {
+            custom: { schedule: "one_time", kind: "map_and_blueprints", reason: "one-time wipe" }
+          }
+        }
+      });
+
+      const runNowResponse = await fetch(`${baseUrl}/wipes/run-now`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "map",
+          reason: "test wipe",
+          backupBeforeWipe: true,
+          restartAfterWipe: false
+        })
+      });
+      expect(runNowResponse.status).toBe(200);
+      expect(await runNowResponse.json()).toMatchObject({
+        success: true,
+        data: { kind: "map", backupFileName: "rustpilot-backup-default-test.zip" }
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("lists and reads log files after setup", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    writeFileSync(path.join(f.paths.logsDir, "rustpilot.log"), "line one\nline two\n");
+    writeFileSync(path.join(f.paths.logsDir, "notes.txt"), "not a log");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const listResponse = await fetch(`${baseUrl}/logs/files`);
+      expect(listResponse.status).toBe(200);
+      const list = await listResponse.json();
+      expect(list).toMatchObject({
+        success: true,
+        data: [{ fileName: "rustpilot.log" }]
+      });
+      expect(list.data.some((file: { fileName: string }) => file.fileName === "notes.txt")).toBe(false);
+
+      const readResponse = await fetch(`${baseUrl}/logs/files/rustpilot.log`);
+      expect(readResponse.status).toBe(200);
+      expect(await readResponse.json()).toMatchObject({
+        success: true,
+        data: { content: "line one\nline two\n", truncated: false }
+      });
+
+      const traversalResponse = await fetch(`${baseUrl}/logs/files/..%2Frustpilot.log`);
+      expect(traversalResponse.status).toBe(404);
     } finally {
       server.close();
       f.cleanup();

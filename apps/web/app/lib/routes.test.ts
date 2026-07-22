@@ -23,4 +23,12 @@ describe("route setup guard decisions", () => {
     expect(getSetupRedirectTarget("/backups/manual", false)).toBe("/setup");
     expect(getSetupRedirectTarget("/backups/automatic", false)).toBe("/setup");
   });
+
+  it("blocks wipes when setup is incomplete", () => {
+    expect(getSetupRedirectTarget("/wipes", false)).toBe("/setup");
+  });
+
+  it("blocks logs when setup is incomplete", () => {
+    expect(getSetupRedirectTarget("/logs", false)).toBe("/setup");
+  });
 });

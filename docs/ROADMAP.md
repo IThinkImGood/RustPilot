@@ -19,11 +19,12 @@
 
 - Manual backups: implemented
 - Automatic backups: implemented
-- Wipe planner
-- Map and blueprint wipes
-- New seeds
-- Pre-wipe backup
-- Update scheduling
+- Official Rust force wipe planner plus additional custom wipe schedules: implemented
+- Map and blueprint wipes: implemented
+- New seed workflow: implemented
+- Pre-wipe backup: implemented
+- Backup restore: implemented
+- Log viewer: implemented
 
 ## Phase 4
 

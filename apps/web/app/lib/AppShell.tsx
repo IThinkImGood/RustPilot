@@ -1,6 +1,6 @@
 "use client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBoxArchive, faClockRotateLeft, faFileCode, faGear, faGaugeHigh, faHand, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBoxArchive, faClockRotateLeft, faFileCode, faFileLines, faGear, faGaugeHigh, faHand, faSkullCrossbones, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -95,6 +95,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
             </div>
+            <Link href="/wipes" className={activePath === "/wipes" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faSkullCrossbones} fixedWidth />
+              <span>Wipes</span>
+            </Link>
           </div>
         </header>
         <nav className="nav">
@@ -106,6 +110,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/console" className={activePath === "/console" ? "active" : undefined}>
               <FontAwesomeIcon className="nav-link-icon" icon={faTerminal} fixedWidth />
               <span>Console</span>
+            </Link>
+            <Link href="/logs" className={activePath === "/logs" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faFileLines} fixedWidth />
+              <span>Logs</span>
             </Link>
             {!setupCompleted && (
               <Link href="/setup" className={activePath === "/setup" ? "active" : undefined}>

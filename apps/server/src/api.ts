@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
-import { backupScheduleSchema, commandRequestSchema, restartScheduleSchema, settingsUpdateSchema } from "@rustpilot/shared";
+import { backupScheduleSchema, commandRequestSchema, restartScheduleSchema, settingsUpdateSchema, wipePlannerConfigSchema } from "@rustpilot/shared";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
 import { openBrowser } from "./browser.js";
 import type { EventLogger } from "./logger.js";
@@ -12,10 +12,12 @@ import type { WebRconClient } from "./webRconClient.js";
 import type { RestartScheduler } from "./restartScheduler.js";
 import type { MetricsCollector } from "./metricsCollector.js";
 import type { BackupScheduler } from "./backupScheduler.js";
+import type { WipePlanner } from "./wipePlanner.js";
 import { computeSetupStatus } from "./setupStatus.js";
 import { validateInstallDirectory, type InstallDirectoryChoice } from "./installDirectoryValidation.js";
 import { CFG_FILES, ensureDefaultCfgFiles, getCfgDirectory, getCfgPath } from "./cfgFiles.js";
-import { createManualBackup, deleteManualBackup, listManualBackups } from "./backups.js";
+import { createManualBackup, deleteManualBackup, listManualBackups, restoreManualBackup } from "./backups.js";
+import { listLogFiles, readLogFile } from "./logFiles.js";
 
 function ok<T>(data: T) {
   return { success: true as const, data };
@@ -28,6 +30,7 @@ function fail(code: string, message: string, details?: unknown) {
 const SETUP_INCOMPLETE_MESSAGE = "Complete the RustPilot installation first.";
 const WIPE_CONFIRMATION = "WIPE SERVER";
 const RESET_CONFIRMATION = "RESET INSTALLATION";
+const RESTORE_BACKUP_CONFIRMATION = "RESTORE BACKUP";
 function rejectIncompleteSetup(res: express.Response): void {
   res.status(409).json(fail("SETUP_INCOMPLETE", SETUP_INCOMPLETE_MESSAGE));
 }
@@ -88,6 +91,7 @@ export function createApiRouter(deps: {
   webRcon: WebRconClient;
   restartScheduler: RestartScheduler;
   backupScheduler: BackupScheduler;
+  wipePlanner: WipePlanner;
   metrics?: MetricsCollector;
   panelUrl: string;
 }): express.Router {
@@ -334,6 +338,26 @@ export function createApiRouter(deps: {
     deps.logger.emit("rustpilot", "system", "warn", `Manual backup deleted: ${deleted.fileName}`);
     res.json(ok({ deleted: true, backup: deleted }));
   });
+  router.post("/backups/:fileName/restore", async (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    if (!hasConfirmation(req, RESTORE_BACKUP_CONFIRMATION)) {
+      res.status(400).json(fail("CONFIRMATION_REQUIRED", `Type ${RESTORE_BACKUP_CONFIRMATION} to restore a backup.`));
+      return;
+    }
+    const settings = deps.storage.getSettings();
+    try {
+      await deps.processManager.stop(settings);
+      const restored = restoreManualBackup(deps.adapter, settings, req.params.fileName);
+      if (!restored) {
+        res.status(404).json(fail("BACKUP_NOT_FOUND", "Backup was not found."));
+        return;
+      }
+      deps.logger.emit("rustpilot", "system", "warn", `Manual backup restored: ${restored.restoredBackup.fileName}`);
+      res.json(ok(restored));
+    } catch (error) {
+      res.status(409).json(fail("BACKUP_RESTORE_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
   router.get("/backups/schedule", (_req, res) => {
     if (rejectIfSetupIncomplete(deps, res)) return;
     res.json(ok(deps.backupScheduler.getStatus()));
@@ -346,6 +370,48 @@ export function createApiRouter(deps: {
       return;
     }
     res.json(ok(deps.backupScheduler.saveSchedule(parsed.data)));
+  });
+  router.get("/wipes/planner", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    res.json(ok(deps.wipePlanner.getStatus()));
+  });
+  router.put("/wipes/planner", (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const parsed = wipePlannerConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Wipe plan is invalid.", parsed.error.flatten()));
+      return;
+    }
+    try {
+      res.json(ok(deps.wipePlanner.saveConfig(parsed.data)));
+    } catch (error) {
+      res.status(400).json(fail("VALIDATION_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/wipes/planner/cancel", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    res.json(ok(deps.wipePlanner.cancelCustomSchedule()));
+  });
+  router.post("/wipes/run-now", async (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const parsed = wipePlannerConfigSchema.shape.custom.safeParse({
+      schedule: "one_time",
+      runAt: new Date(Date.now() + 60_000).toISOString(),
+      weeklyDay: null,
+      weeklyTime: null,
+      monthlyWeekday: null,
+      monthlyTime: null,
+      ...req.body
+    });
+    if (!parsed.success) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Wipe request is invalid.", parsed.error.flatten()));
+      return;
+    }
+    try {
+      res.json(ok(await deps.wipePlanner.runNow(parsed.data)));
+    } catch (error) {
+      res.status(409).json(fail("WIPE_FAILED", error instanceof Error ? error.message : String(error)));
+    }
   });
   router.get("/rcon/status", (_req, res) => {
     res.json(ok(deps.webRcon.getStatus()));
@@ -528,6 +594,21 @@ export function createApiRouter(deps: {
     res.json(ok({ reset: true }));
   });
   router.get("/logs/recent", (_req, res) => res.json(ok({ events: deps.logger.recent(500) })));
+  router.get("/logs/files", (_req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const paths = deps.adapter.getPaths(deps.storage.getSettings());
+    res.json(ok(listLogFiles(paths.logsDir)));
+  });
+  router.get("/logs/files/:fileName", (req, res) => {
+    if (rejectIfSetupIncomplete(deps, res)) return;
+    const paths = deps.adapter.getPaths(deps.storage.getSettings());
+    const file = readLogFile(paths.logsDir, req.params.fileName);
+    if (!file) {
+      res.status(404).json(fail("LOG_FILE_NOT_FOUND", "Log file was not found."));
+      return;
+    }
+    res.json(ok(file));
+  });
   router.post("/system/open-panel", (_req, res) => {
     openBrowser(deps.panelUrl);
     res.json(ok({ opened: true }));

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { BackupSummary } from "@rustpilot/shared/browser";
+import type { BackupRestoreResult, BackupSummary } from "@rustpilot/shared/browser";
 import { api } from "../../lib/api";
 import { formatLocalDateTime, shortenPath } from "../../lib/format";
 import { ProtectedPage } from "../../lib/ProtectedPage";
@@ -25,6 +25,7 @@ export default function ManualBackupsPage() {
   const [messageKind, setMessageKind] = useState<"ok" | "error">("ok");
   const [action, setAction] = useState<"create" | "refresh" | null>(null);
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null);
+  const [restoringFileName, setRestoringFileName] = useState<string | null>(null);
 
   async function loadBackups() {
     setAction("refresh");
@@ -78,6 +79,28 @@ export default function ManualBackupsPage() {
     }
   }
 
+  async function restoreBackup(backup: BackupSummary) {
+    const confirmation = window.prompt(`Restore ${backup.fileName}? This stops the server and replaces the current identity data. Type RESTORE BACKUP to confirm.`);
+    if (confirmation !== "RESTORE BACKUP") return;
+    setRestoringFileName(backup.fileName);
+    setMessage("");
+    setMessageKind("ok");
+    try {
+      const result = await api<BackupRestoreResult>(`/backups/${encodeURIComponent(backup.fileName)}/restore`, {
+        method: "POST",
+        body: JSON.stringify({ confirmation })
+      });
+      setMessage(`Backup restored. ${result.restoredFiles.length} file${result.restoredFiles.length === 1 ? "" : "s"} restored.${result.safetyBackup ? ` Safety backup: ${result.safetyBackup.fileName}` : ""}`);
+      await loadBackups();
+      await guard.refresh();
+    } catch (error) {
+      setMessageKind("error");
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRestoringFileName(null);
+    }
+  }
+
   useEffect(() => {
     if (guard.status?.setup?.setupCompleted) void loadBackups();
   }, [guard.status?.setup?.setupCompleted]);
@@ -112,6 +135,9 @@ export default function ManualBackupsPage() {
                   </div>
                   <span className="path-value" title={backup.path}>{shortenPath(backup.path, 58)}</span>
                   <button type="button" className="icon-button" onClick={() => copyText(backup.path)}>Copy path</button>
+                  <button type="button" className="icon-button" onClick={() => restoreBackup(backup)} disabled={restoringFileName === backup.fileName}>
+                    {restoringFileName === backup.fileName ? "Restoring..." : "Restore"}
+                  </button>
                   <button type="button" className="danger icon-button" onClick={() => deleteBackup(backup)} disabled={deletingFileName === backup.fileName}>
                     {deletingFileName === backup.fileName ? "Deleting..." : "Delete"}
                   </button>

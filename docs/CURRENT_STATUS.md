@@ -33,6 +33,10 @@ http://127.0.0.1:3001
 - The RustPilot database remains in the app runtime folder.
 - Installation can only start after server-side install directory validation.
 - The Backups top-nav dropdown links to separate Manual and Automatic backup pages for Rust identity data and cfg files.
+- The Wipes page separates the official Rust force wipe from additional custom wipe schedules, follows Facepunch's first-Thursday monthly wipe timer, and combines close custom wipes to avoid duplicate wipes.
+- Map wipes can keep the current seed, generate a random seed, or store an explicit next seed before restart.
+- Manual backups can be restored after explicit confirmation; RustPilot creates a safety backup before replacing current identity data.
+- The Logs page in the left navigation lists safe `.log` files and reads the latest log content from disk.
 
 ## Install Directory Validation
 
@@ -83,6 +87,7 @@ apps/server/src/setupStatus.ts
 apps/server/src/installDirectoryValidation.ts
 apps/server/src/backups.ts
 apps/server/src/backupScheduler.ts
+apps/server/src/wipePlanner.ts
 apps/server/src/websocket.ts
 ```
 
@@ -108,7 +113,7 @@ Current test count:
 
 ```text
 14 test files passed
-87 tests passed
+99 tests passed
 ```
 
 `npm run lint` currently reports existing `any` warnings, but no errors.

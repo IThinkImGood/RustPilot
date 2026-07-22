@@ -4,13 +4,16 @@ import { DatabaseSync } from "node:sqlite";
 import {
   defaultServerSettings,
   backupScheduleSchema,
+  defaultWipePlannerConfig,
   restartScheduleSchema,
+  wipePlannerConfigSchema,
   type BackupScheduleConfig,
   serverSettingsSchema,
   type InstallationState,
   type RestartScheduleConfig,
   type ServerSettings,
-  type SetupStatus
+  type SetupStatus,
+  type WipePlannerConfig
 } from "@rustpilot/shared";
 
 export class Storage {
@@ -78,6 +81,7 @@ export class Storage {
     this.clearScheduledRestart();
     this.saveRestartSchedule({ enabled: false, times: [], reason: null });
     this.saveBackupSchedule({ enabled: false, times: [], retentionCount: 20 });
+    this.saveWipePlannerConfig(defaultWipePlannerConfig);
     this.db
       .prepare(
         "UPDATE runtime SET installation_state = 'not_configured', setup_completed = 0, install_error = NULL, last_start = NULL, last_stop = NULL, last_exit_code = NULL, last_signal = NULL, last_crash_at = NULL WHERE id = 1"
@@ -222,6 +226,29 @@ export class Storage {
       .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('backup_schedule', ?)")
       .run(JSON.stringify(normalized));
     return normalized;
+  }
+
+  getWipePlannerConfig(): WipePlannerConfig {
+    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'wipe_planner_config'").get() as
+      | { value: string }
+      | undefined;
+    if (!row) return wipePlannerConfigSchema.parse(defaultWipePlannerConfig);
+    try {
+      const parsed = wipePlannerConfigSchema.safeParse(JSON.parse(row.value));
+      if (!parsed.success) return wipePlannerConfigSchema.parse(defaultWipePlannerConfig);
+      return parsed.data;
+    } catch {
+      return wipePlannerConfigSchema.parse(defaultWipePlannerConfig);
+    }
+  }
+
+  saveWipePlannerConfig(config: WipePlannerConfig): WipePlannerConfig {
+    const parsed = wipePlannerConfigSchema.parse(config);
+    this.db
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('wipe_planner_config', ?)")
+      .run(JSON.stringify(parsed));
+    this.db.prepare("DELETE FROM meta WHERE key = 'wipe_plan'").run();
+    return parsed;
   }
 
   getRuntimeMeta(): {

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import AdmZip from "adm-zip";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
-import type { BackupSummary, ServerSettings } from "@rustpilot/shared";
+import type { BackupRestoreResult, BackupSummary, ServerSettings } from "@rustpilot/shared";
 
 const BACKUP_PREFIX = "rustpilot-backup";
 const BACKUP_PATTERN = /^rustpilot-backup-(.+)-(\d{8}T\d{6}Z)(?:-\d+)?\.zip$/;
@@ -103,4 +103,72 @@ export function deleteManualBackup(adapter: RustAdapter, settings: ServerSetting
   const summary = summarizeBackup(backupPath, settings.identity);
   fs.rmSync(backupPath, { force: true });
   return summary;
+}
+
+export function restoreManualBackup(adapter: RustAdapter, settings: ServerSettings, fileName: string): BackupRestoreResult | null {
+  if (!BACKUP_FILE_NAME_PATTERN.test(fileName) || path.basename(fileName) !== fileName) return null;
+  const paths = adapter.getPaths(settings);
+  const backupsDir = path.resolve(paths.backupsDir);
+  const backupPath = path.resolve(backupsDir, fileName);
+  if (!backupPath.startsWith(`${backupsDir}${path.sep}`) || !fs.existsSync(backupPath)) return null;
+
+  const restoredBackup = summarizeBackup(backupPath, settings.identity);
+  const zip = new AdmZip(backupPath);
+  const manifestEntry = zip.getEntry("rustpilot-backup.json");
+  const manifest = parseManifest(manifestEntry?.getData().toString("utf8"));
+  const sourceIdentity = manifest?.identity || restoredBackup.identity || settings.identity;
+  const rustIdentityDir = path.resolve(paths.serverDir, "server", settings.identity);
+  const legacyIdentityDir = path.resolve(paths.identityDir);
+  const restoredFiles: string[] = [];
+  const safetyBackup = fs.existsSync(rustIdentityDir) || fs.existsSync(legacyIdentityDir) ? createManualBackup(adapter, settings) : null;
+
+  fs.rmSync(rustIdentityDir, { recursive: true, force: true });
+  fs.rmSync(legacyIdentityDir, { recursive: true, force: true });
+
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory || entry.entryName === "rustpilot-backup.json") continue;
+    const normalized = entry.entryName.replace(/\\/g, "/");
+    const rustPrefix = `server/${sourceIdentity}/`;
+    if (normalized.startsWith(rustPrefix)) {
+      const relative = normalized.slice(rustPrefix.length);
+      const target = safeRestoreTarget(rustIdentityDir, relative);
+      if (!target) continue;
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, entry.getData());
+      restoredFiles.push(target);
+      continue;
+    }
+    if (normalized.startsWith("identity/")) {
+      const relative = normalized.slice("identity/".length);
+      const target = safeRestoreTarget(legacyIdentityDir, relative);
+      if (!target) continue;
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, entry.getData());
+      restoredFiles.push(target);
+    }
+  }
+
+  return {
+    restoredBackup,
+    safetyBackup,
+    sourceIdentity,
+    targetIdentity: settings.identity,
+    restoredFiles: restoredFiles.sort()
+  };
+}
+
+function parseManifest(value?: string): { identity?: string } | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as { identity?: unknown };
+    return typeof parsed.identity === "string" ? { identity: parsed.identity } : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeRestoreTarget(root: string, relative: string): string | null {
+  if (!relative || relative.includes("\0")) return null;
+  const target = path.resolve(root, relative);
+  return target.startsWith(`${root}${path.sep}`) ? target : null;
 }
