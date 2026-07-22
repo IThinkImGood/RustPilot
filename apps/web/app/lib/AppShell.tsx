@@ -70,6 +70,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="app-header">
           <Link className="app-header-brand" href="/dashboard">RustPilot</Link>
           <div className="top-nav">
+            <Link href="/settings" className={activePath === "/settings" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faGear} fixedWidth />
+              <span>Settings</span>
+            </Link>
             <Link href="/cfg-editor" className={activePath === "/cfg-editor" ? "active" : undefined}>
               <FontAwesomeIcon className="nav-link-icon" icon={faFileCode} fixedWidth />
               <span>CFG Editor</span>
@@ -85,10 +89,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/console" className={activePath === "/console" ? "active" : undefined}>
               <FontAwesomeIcon className="nav-link-icon" icon={faTerminal} fixedWidth />
               <span>Console</span>
-            </Link>
-            <Link href="/settings" className={activePath === "/settings" ? "active" : undefined}>
-              <FontAwesomeIcon className="nav-link-icon" icon={faGear} fixedWidth />
-              <span>Settings</span>
             </Link>
             {!setupCompleted && (
               <Link href="/setup" className={activePath === "/setup" ? "active" : undefined}>

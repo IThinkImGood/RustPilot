@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
-import { commandRequestSchema, settingsUpdateSchema } from "@rustpilot/shared";
+import { commandRequestSchema, restartScheduleSchema, settingsUpdateSchema } from "@rustpilot/shared";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
 import { openBrowser } from "./browser.js";
 import type { EventLogger } from "./logger.js";
@@ -406,6 +406,19 @@ export function createApiRouter(deps: {
   });
   router.get("/scheduler/restart", (_req, res) => {
     res.json(ok(deps.restartScheduler.getStatus()));
+  });
+  router.put("/scheduler/restart/schedule", (req, res) => {
+    const setup = computeSetupStatus(deps.storage, deps.adapter);
+    if (!setup.setupCompleted) {
+      rejectIncompleteSetup(res);
+      return;
+    }
+    const parsed = restartScheduleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Restart schedule is invalid.", parsed.error.flatten()));
+      return;
+    }
+    res.json(ok(deps.restartScheduler.saveDailySchedule(parsed.data)));
   });
   router.post("/scheduler/restart", (req, res) => {
     if (rejectIfRconUnavailable(deps, res)) return;

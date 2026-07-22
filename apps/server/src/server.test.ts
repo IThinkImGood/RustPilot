@@ -18,7 +18,7 @@ import { computeSetupStatus } from "./setupStatus.js";
 import { createApiRouter } from "./api.js";
 import { validateInstallDirectory } from "./installDirectoryValidation.js";
 import { WebRconClient } from "./webRconClient.js";
-import { RestartScheduler } from "./restartScheduler.js";
+import { nextDailyRunAt, RestartScheduler } from "./restartScheduler.js";
 
 class FakeChild extends EventEmitter {
   stdout = new PassThrough();
@@ -143,7 +143,7 @@ describe("RestartScheduler", () => {
       const runAt = new Date(Date.now() + 30 * 60_000).toISOString();
       f.storage.saveScheduledRestart(runAt, "restore test");
       const scheduler = new RestartScheduler(f.storage, fakeProcessManager(), f.logger);
-      expect(scheduler.getStatus()).toEqual({ scheduled: true, runAt, reason: "restore test" });
+      expect(scheduler.getStatus()).toMatchObject({ scheduled: true, runAt, reason: "restore test", kind: "one_time" });
       scheduler.cancel();
     } finally {
       f.cleanup();
@@ -155,8 +155,29 @@ describe("RestartScheduler", () => {
     try {
       f.storage.saveScheduledRestart(new Date(Date.now() - 60_000).toISOString(), "expired");
       const scheduler = new RestartScheduler(f.storage, fakeProcessManager(), f.logger);
-      expect(scheduler.getStatus()).toEqual({ scheduled: false, runAt: null, reason: null });
+      expect(scheduler.getStatus()).toMatchObject({ scheduled: false, runAt: null, reason: null, kind: "none" });
       expect(f.storage.getScheduledRestart()).toBeNull();
+    } finally {
+      f.cleanup();
+    }
+  });
+
+  it("calculates the next local daily restart time", () => {
+    const now = new Date(2026, 6, 22, 7, 30, 0, 0);
+    expect(nextDailyRunAt(["06:00", "14:00"], now)).toEqual(new Date(2026, 6, 22, 14, 0, 0, 0));
+    expect(nextDailyRunAt(["06:00"], now)).toEqual(new Date(2026, 6, 23, 6, 0, 0, 0));
+  });
+
+  it("saves daily restart schedules", () => {
+    const f = fixture();
+    try {
+      const scheduler = new RestartScheduler(f.storage, fakeProcessManager(), f.logger);
+      const status = scheduler.saveDailySchedule({ enabled: true, times: ["14:00", "06:00"], reason: "daily restart" });
+      expect(status.kind).toBe("daily");
+      expect(status.schedule).toEqual({ enabled: true, times: ["06:00", "14:00"], reason: "daily restart" });
+      expect(f.storage.getRestartSchedule()).toEqual({ enabled: true, times: ["06:00", "14:00"], reason: "daily restart" });
+      scheduler.cancel();
+      scheduler.saveDailySchedule({ enabled: false, times: [], reason: null });
     } finally {
       f.cleanup();
     }
@@ -306,6 +327,13 @@ describe("setup-gated API actions", () => {
         scheduled: true,
         runAt: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
         reason
+      }),
+      saveDailySchedule: (schedule: { enabled: boolean; times: string[]; reason: string | null }) => ({
+        scheduled: schedule.enabled,
+        runAt: schedule.enabled ? new Date(Date.now() + 60_000).toISOString() : null,
+        reason: schedule.reason,
+        kind: schedule.enabled ? "daily" : "none",
+        schedule
       }),
       cancel: () => ({ scheduled: false, runAt: null, reason: null })
     } as unknown as RestartScheduler;
@@ -566,6 +594,34 @@ describe("setup-gated API actions", () => {
       body: JSON.stringify(defaultServerSettings)
     });
     expect(response.status).toBe(200);
+  });
+
+  it("saves fixed daily restart schedules after setup", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/scheduler/restart/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true, times: ["06:00", "14:00"], reason: "daily restart" })
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        success: true,
+        data: {
+          kind: "daily",
+          schedule: { enabled: true, times: ["06:00", "14:00"], reason: "daily restart" }
+        }
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
   });
 
   it("keeps the existing rcon password when normal settings save sends an empty password", async () => {

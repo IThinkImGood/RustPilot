@@ -49,6 +49,7 @@ export function ServerControlsPanel({ status, refresh }: { status: StatusData | 
   const processState = status?.process?.processState ?? "stopped";
   const serverRunning = processState === "running";
   const scheduledRestart = status?.scheduledRestart;
+  const canCancelRestart = scheduledRestart?.scheduled === true && scheduledRestart.kind !== "daily";
   const actions = getDashboardActionStates({
     setupCompleted,
     installationState: status?.setup?.installationState,
@@ -200,7 +201,7 @@ export function ServerControlsPanel({ status, refresh }: { status: StatusData | 
             <button onClick={() => setRestartOpen(true)} disabled={!setupCompleted || !serverRunning || pendingAction !== null}>
               Edit
             </button>
-            <button onClick={cancelRestart} disabled={!scheduledRestart?.scheduled || pendingAction !== null}>
+            <button onClick={cancelRestart} disabled={!canCancelRestart || pendingAction !== null}>
               {pendingAction === "cancel-restart" ? "Canceling..." : "Cancel"}
             </button>
           </div>

@@ -9,6 +9,13 @@ import { getDashboardActionStates } from "../lib/actions";
 export default function SettingsPage() {
   const guard = useRustPilot();
   const [form, setForm] = useState<any>(defaultServerSettings);
+  const [restartScheduleEnabled, setRestartScheduleEnabled] = useState(false);
+  const [restartScheduleTimes, setRestartScheduleTimes] = useState<string[]>([]);
+  const [restartScheduleTime, setRestartScheduleTime] = useState("06:00");
+  const [restartScheduleReason, setRestartScheduleReason] = useState("");
+  const [restartScheduleMessage, setRestartScheduleMessage] = useState("");
+  const [restartScheduleMessageKind, setRestartScheduleMessageKind] = useState<"ok" | "error">("ok");
+  const [restartScheduleSaving, setRestartScheduleSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageKind, setMessageKind] = useState<"ok" | "error">("ok");
   const [serverFileMessage, setServerFileMessage] = useState("");
@@ -34,6 +41,13 @@ export default function SettingsPage() {
   useEffect(() => {
     api<any>("/settings").then((settings) => setForm({ ...defaultServerSettings, ...settings, rconPassword: "" }));
   }, []);
+  useEffect(() => {
+    const schedule = guard.status?.scheduledRestart?.schedule;
+    if (!schedule) return;
+    setRestartScheduleEnabled(schedule.enabled);
+    setRestartScheduleTimes(schedule.times);
+    setRestartScheduleReason(schedule.reason ?? "");
+  }, [guard.status?.scheduledRestart?.schedule]);
   function set(name: string, value: unknown) {
     setForm((current: any) => ({ ...current, [name]: value }));
   }
@@ -104,6 +118,35 @@ export default function SettingsPage() {
       setServerFileAction(null);
     }
   }
+  function addRestartTime() {
+    if (!restartScheduleTime || restartScheduleTimes.includes(restartScheduleTime)) return;
+    setRestartScheduleTimes((current) => [...current, restartScheduleTime].sort());
+  }
+  function removeRestartTime(time: string) {
+    setRestartScheduleTimes((current) => current.filter((value) => value !== time));
+  }
+  async function saveRestartSchedule() {
+    setRestartScheduleSaving(true);
+    setRestartScheduleMessage("");
+    setRestartScheduleMessageKind("ok");
+    try {
+      await api("/scheduler/restart/schedule", {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: restartScheduleEnabled,
+          times: restartScheduleTimes,
+          reason: restartScheduleReason.trim() || null
+        })
+      });
+      setRestartScheduleMessage("Restart schedule saved.");
+      await guard.refresh();
+    } catch (error) {
+      setRestartScheduleMessageKind("error");
+      setRestartScheduleMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRestartScheduleSaving(false);
+    }
+  }
   function openConfirmation(action: "wipe" | "reset") {
     setConfirmingAction(action);
     setConfirmationText("");
@@ -161,6 +204,45 @@ export default function SettingsPage() {
           </button>
         </div>
         {serverFileMessage && <p className={`validation-message ${serverFileMessageKind}`}>{serverFileMessage}</p>}
+      </section>
+      <section className="panel restart-schedule-panel">
+        <div>
+          <h2>Restart schedule</h2>
+          <p className="muted">
+            Fixed daily restart times use the local timezone where RustPilot runs: {Intl.DateTimeFormat().resolvedOptions().timeZone}.
+          </p>
+        </div>
+        <label className="checkbox-field">
+          <span>Enable fixed daily restarts</span>
+          <input type="checkbox" checked={restartScheduleEnabled} onChange={(event) => setRestartScheduleEnabled(event.target.checked)} />
+        </label>
+        <div className="restart-time-editor">
+          <label>
+            Restart time
+            <input type="time" value={restartScheduleTime} onChange={(event) => setRestartScheduleTime(event.target.value)} />
+          </label>
+          <button type="button" onClick={addRestartTime}>Add time</button>
+        </div>
+        <div className="restart-time-list">
+          {restartScheduleTimes.length === 0 ? (
+            <p className="muted">No fixed restart times configured.</p>
+          ) : restartScheduleTimes.map((time) => (
+            <span className="restart-time-chip" key={time}>
+              {time}
+              <button type="button" onClick={() => removeRestartTime(time)} aria-label={`Remove ${time}`}>x</button>
+            </span>
+          ))}
+        </div>
+        <label>
+          Restart reason
+          <input value={restartScheduleReason} onChange={(event) => setRestartScheduleReason(event.target.value)} placeholder="Optional reason shown in logs" maxLength={160} />
+        </label>
+        <div className="actions">
+          <button type="button" className="primary" onClick={saveRestartSchedule} disabled={restartScheduleSaving || (restartScheduleEnabled && restartScheduleTimes.length === 0)}>
+            {restartScheduleSaving ? "Saving..." : "Save restart schedule"}
+          </button>
+          {restartScheduleMessage && <span className={`validation-message ${restartScheduleMessageKind}`}>{restartScheduleMessage}</span>}
+        </div>
       </section>
       <section className="panel danger-zone">
         <div className="danger-zone-header">

@@ -855,6 +855,58 @@ label {
   align-items: center;
 }
 
+.restart-schedule-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.restart-schedule-panel h2,
+.restart-schedule-panel p {
+  margin: 0;
+}
+
+.restart-time-editor {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.restart-time-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 34px;
+  align-items: center;
+}
+
+.restart-time-list p {
+  margin: 0;
+}
+
+.restart-time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: var(--admin-panel-2);
+  padding: 5px 7px 5px 10px;
+  color: var(--admin-text);
+  font-weight: 700;
+}
+
+.restart-time-chip button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
 .cfg-editor-panel {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);

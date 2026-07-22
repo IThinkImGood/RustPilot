@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { defaultServerSettings, serverSettingsSchema, type InstallationState, type ServerSettings, type SetupStatus } from "@rustpilot/shared";
+import {
+  defaultServerSettings,
+  restartScheduleSchema,
+  serverSettingsSchema,
+  type InstallationState,
+  type RestartScheduleConfig,
+  type ServerSettings,
+  type SetupStatus
+} from "@rustpilot/shared";
 
 export class Storage {
   private db!: DatabaseSync;
@@ -65,6 +73,8 @@ export class Storage {
 
   resetSetup(): void {
     this.db.prepare("DELETE FROM settings WHERE id = 'default'").run();
+    this.clearScheduledRestart();
+    this.saveRestartSchedule({ enabled: false, times: [], reason: null });
     this.db
       .prepare(
         "UPDATE runtime SET installation_state = 'not_configured', setup_completed = 0, install_error = NULL, last_start = NULL, last_stop = NULL, last_exit_code = NULL, last_signal = NULL, last_crash_at = NULL WHERE id = 1"
@@ -147,6 +157,37 @@ export class Storage {
 
   clearScheduledRestart(): void {
     this.db.prepare("DELETE FROM meta WHERE key = 'scheduled_restart'").run();
+  }
+
+  getRestartSchedule(): RestartScheduleConfig {
+    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'restart_schedule'").get() as
+      | { value: string }
+      | undefined;
+    if (!row) return { enabled: false, times: [], reason: null };
+    try {
+      const parsed = restartScheduleSchema.safeParse(JSON.parse(row.value));
+      if (!parsed.success) return { enabled: false, times: [], reason: null };
+      return {
+        enabled: parsed.data.enabled,
+        times: [...new Set(parsed.data.times)].sort(),
+        reason: parsed.data.reason || null
+      };
+    } catch {
+      return { enabled: false, times: [], reason: null };
+    }
+  }
+
+  saveRestartSchedule(schedule: RestartScheduleConfig): RestartScheduleConfig {
+    const parsed = restartScheduleSchema.parse(schedule);
+    const normalized = {
+      enabled: parsed.enabled,
+      times: [...new Set(parsed.times)].sort(),
+      reason: parsed.reason || null
+    };
+    this.db
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('restart_schedule', ?)")
+      .run(JSON.stringify(normalized));
+    return normalized;
   }
 
   getRuntimeMeta(): {

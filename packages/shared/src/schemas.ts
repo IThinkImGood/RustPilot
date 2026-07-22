@@ -82,4 +82,26 @@ export const commandRequestSchema = z.object({
   command: z.string().min(1).max(500)
 });
 
+export const restartScheduleSchema = z.object({
+  enabled: z.boolean(),
+  times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm time.")).max(12),
+  reason: z.union([z.literal(""), z.string().max(160)]).nullable().default(null)
+}).superRefine((schedule, ctx) => {
+  if (schedule.enabled && schedule.times.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["times"],
+      message: "Add at least one restart time."
+    });
+  }
+  const uniqueTimes = new Set(schedule.times);
+  if (uniqueTimes.size !== schedule.times.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["times"],
+      message: "Restart times must be unique."
+    });
+  }
+});
+
 export const settingsUpdateSchema = serverSettingsSchema;

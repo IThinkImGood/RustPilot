@@ -63,6 +63,14 @@ export interface ScheduledRestartStatus {
   scheduled: boolean;
   runAt: string | null;
   reason: string | null;
+  kind?: "none" | "one_time" | "daily";
+  schedule?: RestartScheduleConfig;
+}
+
+export interface RestartScheduleConfig {
+  enabled: boolean;
+  times: string[];
+  reason: string | null;
 }
 
 export interface ProcessUsageSample {
