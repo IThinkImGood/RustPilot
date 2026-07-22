@@ -5,7 +5,7 @@ import { getDashboardActionStates } from "./actions";
 import { labelProcessState } from "./format";
 import type { StatusData } from "./useRustPilot";
 
-function ControlIcon({ name }: { name: "play" | "stop" | "restart" | "kickAll" | "megaphone" | "pending" }) {
+function ControlIcon({ name }: { name: "play" | "stop" | "restart" | "save" | "kickAll" | "megaphone" | "pending" }) {
   if (name === "pending") return <span className="nav-server-pending-icon">...</span>;
   return (
     <svg className="nav-server-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -15,6 +15,13 @@ function ControlIcon({ name }: { name: "play" | "stop" | "restart" | "kickAll" |
         <>
           <path d="M18 7v5h-5" />
           <path d="M17 12a5 5 0 1 1-1.5-3.6L18 11" />
+        </>
+      )}
+      {name === "save" && (
+        <>
+          <path d="M5 4h12l2 2v14H5z" />
+          <path d="M8 4v6h8V4" />
+          <path d="M8 16h8" />
         </>
       )}
       {name === "megaphone" && (
@@ -174,6 +181,15 @@ export function ServerControlsPanel({ status, refresh }: { status: StatusData | 
             aria-label={pendingAction === "restart" ? "Restarting server" : "Restart server"}
           >
             <ControlIcon name={pendingAction === "restart" ? "pending" : "restart"} />
+          </button>
+          <button
+            className="nav-server-icon-button"
+            onClick={() => runAction("/rcon/save", "save")}
+            disabled={!setupCompleted || !serverRunning || pendingAction !== null}
+            title={pendingAction === "save" ? "Saving world" : "Save world"}
+            aria-label={pendingAction === "save" ? "Saving world" : "Save world"}
+          >
+            <ControlIcon name={pendingAction === "save" ? "pending" : "save"} />
           </button>
           <button
             className="nav-server-icon-button"

@@ -41,15 +41,26 @@ function normalizeJsonPlayer(value: unknown, index: number): RconPlayer | null {
   const record = value as Record<string, unknown>;
   const steamId =
     stringValue(record.SteamID) ??
+    stringValue(record.SteamId) ??
+    stringValue(record.SteamIDString) ??
     stringValue(record.steamId) ??
+    stringValue(record.steamID) ??
     stringValue(record.steamid) ??
+    stringValue(record.steamIDString) ??
     stringValue(record.userid) ??
     stringValue(record.UserID) ??
+    stringValue(record.UserId) ??
+    stringValue(record.userId) ??
     stringValue(record.id);
   const name =
     stringValue(record.DisplayName) ??
+    stringValue(record.Displayname) ??
     stringValue(record.displayName) ??
+    stringValue(record.displayname) ??
     stringValue(record.Name) ??
+    stringValue(record.Username) ??
+    stringValue(record.UserName) ??
+    stringValue(record.username) ??
     stringValue(record.name) ??
     steamId ??
     `Player ${index + 1}`;
@@ -58,8 +69,12 @@ function normalizeJsonPlayer(value: unknown, index: number): RconPlayer | null {
     id,
     name,
     target: steamId ?? name,
-    ping: numberValue(record.Ping) ?? numberValue(record.ping),
-    connectedSeconds: numberValue(record.ConnectedSeconds) ?? numberValue(record.connectedSeconds)
+    ping: numberValue(record.Ping) ?? numberValue(record.ping) ?? numberValue(record.Latency) ?? numberValue(record.latency),
+    connectedSeconds:
+      numberValue(record.ConnectedSeconds) ??
+      numberValue(record.connectedSeconds) ??
+      numberValue(record.Connected) ??
+      numberValue(record.connected)
   };
 }
 
@@ -72,7 +87,7 @@ function parseTextPlayers(message: string): RconPlayer[] {
 
 function parseTextPlayerLine(line: string, index: number): RconPlayer | null {
   const text = line.trim();
-  if (!text || /^playerlist\b/i.test(text) || /^steamid\b/i.test(text) || /^players?:\s*$/i.test(text)) return null;
+  if (!text || /^playerlist\b/i.test(text) || /^steamid\s*($|\|)/i.test(text) || /^players?:\s*$/i.test(text)) return null;
   const steamId = text.match(/\b\d{15,20}\b/)?.[0] ?? null;
   const quotedName = text.match(/"([^"]+)"/)?.[1]?.trim() ?? null;
   const ping = numberFromMatch(text.match(/\bping[:=]?\s*(\d+)\b/i) ?? text.match(/\b(\d+)\s*ms\b/i));
@@ -86,9 +101,15 @@ function parseTextPlayerLine(line: string, index: number): RconPlayer | null {
 }
 
 function inferTextName(text: string, steamId: string | null): string | null {
+  const keyedName =
+    text.match(/\bname[:=]\s*"([^"]+)"/i)?.[1]?.trim() ??
+    text.match(/\bname[:=]\s*([^\s|,\]]+)/i)?.[1]?.trim();
+  if (keyedName) return keyedName.replace(/\s+/g, " ");
   let value = text
     .replace(/^\s*\d+[).:-]?\s*/, "")
+    .replace(/^\s*\d+\s*\|\s*/, "")
     .replace(/\b\d{15,20}\b/g, "")
+    .replace(/\bsteamid[:=]?\s*/gi, "")
     .replace(/\bping[:=]?\s*\d+\b/gi, "")
     .replace(/\b\d+\s*ms\b/gi, "")
     .replace(/\b(address|ip|connected|seconds|secs|health)[:=]\S+/gi, "")

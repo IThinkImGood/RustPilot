@@ -522,7 +522,7 @@ describe("setup-gated API actions", () => {
     }
   });
 
-  it("sends kickall through WebRCON for kick-all players", async () => {
+  it("sends guided admin commands through WebRCON", async () => {
     const f = fixture();
     writeFileSync(f.paths.steamCmdExe, "");
     writeFileSync(f.paths.rustDedicatedExe, "");
@@ -582,7 +582,19 @@ describe("setup-gated API actions", () => {
         body: "{}"
       });
       expect(response.status).toBe(200);
-      expect(sentCommands).toEqual(["kickall"]);
+      const saveResponse = await fetch(`${baseUrl}/rcon/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      expect(saveResponse.status).toBe(200);
+      const unbanResponse = await fetch(`${baseUrl}/rcon/unban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player: "76561198000000000" })
+      });
+      expect(unbanResponse.status).toBe(200);
+      expect(sentCommands).toEqual(["kickall", "server.save", 'unban "76561198000000000"']);
     } finally {
       f.runner.children[0]?.emit("exit", 0, null);
       server.close();

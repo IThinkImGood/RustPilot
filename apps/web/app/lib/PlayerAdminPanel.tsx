@@ -16,6 +16,8 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerReason, setPlayerReason] = useState("");
   const [playerMessage, setPlayerMessage] = useState("");
+  const [unbanOpen, setUnbanOpen] = useState(false);
+  const [unbanPlayer, setUnbanPlayer] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const rconReady = status?.process?.processState === "running";
   const maxPlayers = status?.settings?.maxPlayers;
@@ -73,6 +75,27 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
     }
   }
 
+  async function unbanSelectedPlayer() {
+    const player = unbanPlayer.trim();
+    if (!player) return;
+    setPendingAction("unban");
+    setPlayerMessage("");
+    try {
+      await api("/rcon/unban", {
+        method: "POST",
+        body: JSON.stringify({ player })
+      });
+      setUnbanOpen(false);
+      setUnbanPlayer("");
+      setPlayerMessage(`Unbanned ${player}.`);
+      await refresh();
+    } catch (error) {
+      setPlayerMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   return (
     <>
       <section className="card player-count-card">
@@ -87,9 +110,12 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
             <h2>Players</h2>
             <p className="muted">{players.length} loaded</p>
           </div>
-          <button onClick={loadPlayers} disabled={!rconReady || pendingAction !== null}>
-            {pendingAction === "players" ? "Loading..." : "Refresh"}
-          </button>
+          <div className="player-admin-header-actions">
+            <button onClick={() => setUnbanOpen(true)} disabled={!rconReady || pendingAction !== null}>Unban</button>
+            <button onClick={loadPlayers} disabled={!rconReady || pendingAction !== null}>
+              {pendingAction === "players" ? "Loading..." : "Refresh"}
+            </button>
+          </div>
         </div>
         <input value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search by name or Steam ID" />
         <div className="player-list">
@@ -134,6 +160,30 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
               </button>
               <button className="danger" onClick={() => playerAction("ban")} disabled={pendingAction !== null}>
                 {pendingAction === "ban" ? "Banning..." : "Ban"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {unbanOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal player-action-modal" role="dialog" aria-modal="true" aria-labelledby="unban-title">
+            <h2 id="unban-title">Unban player</h2>
+            <p className="muted">Remove a ban by SteamID64 or exact player name.</p>
+            <label>
+              <span>SteamID64 or player name</span>
+              <input
+                autoFocus
+                value={unbanPlayer}
+                onChange={(event) => setUnbanPlayer(event.target.value)}
+                placeholder="76561198000000000"
+                maxLength={80}
+              />
+            </label>
+            <div className="actions">
+              <button onClick={() => setUnbanOpen(false)} disabled={pendingAction !== null}>Cancel</button>
+              <button className="primary" onClick={unbanSelectedPlayer} disabled={!unbanPlayer.trim() || pendingAction !== null}>
+                {pendingAction === "unban" ? "Unbanning..." : "Unban"}
               </button>
             </div>
           </section>

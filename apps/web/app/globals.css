@@ -177,7 +177,7 @@ a {
 
 .nav-server-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1252,6 +1252,17 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.player-admin-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.player-admin-header-actions button {
+  min-height: 36px;
+  padding: 7px 10px;
 }
 
 .player-admin-header h2 {

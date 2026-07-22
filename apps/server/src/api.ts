@@ -344,6 +344,14 @@ export function createApiRouter(deps: {
       res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
     }
   });
+  router.post("/rcon/save", async (_req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), "server.save")));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
   router.post("/rcon/kick", async (req, res) => {
     if (rejectIfRconUnavailable(deps, res)) return;
     const player = simpleText(req.body?.player, 80);
@@ -378,6 +386,19 @@ export function createApiRouter(deps: {
     const command = reasonRaw ? `ban ${rconQuote(player)} ${rconQuote(reasonRaw)}` : `ban ${rconQuote(player)}`;
     try {
       res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), command)));
+    } catch (error) {
+      res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
+    }
+  });
+  router.post("/rcon/unban", async (req, res) => {
+    if (rejectIfRconUnavailable(deps, res)) return;
+    const player = simpleText(req.body?.player, 80);
+    if (!player) {
+      res.status(400).json(fail("VALIDATION_FAILED", "Player name or SteamID64 is required."));
+      return;
+    }
+    try {
+      res.json(ok(await deps.webRcon.sendCommand(deps.storage.getSettings(), `unban ${rconQuote(player)}`)));
     } catch (error) {
       res.status(409).json(fail("RCON_COMMAND_FAILED", error instanceof Error ? error.message : String(error)));
     }
