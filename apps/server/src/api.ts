@@ -13,6 +13,7 @@ import type { RestartScheduler } from "./restartScheduler.js";
 import type { MetricsCollector } from "./metricsCollector.js";
 import { computeSetupStatus } from "./setupStatus.js";
 import { validateInstallDirectory, type InstallDirectoryChoice } from "./installDirectoryValidation.js";
+import { CFG_FILES, ensureDefaultCfgFiles, getCfgDirectory, getCfgPath } from "./cfgFiles.js";
 
 function ok<T>(data: T) {
   return { success: true as const, data };
@@ -25,22 +26,6 @@ function fail(code: string, message: string, details?: unknown) {
 const SETUP_INCOMPLETE_MESSAGE = "Complete the RustPilot installation first.";
 const WIPE_CONFIRMATION = "WIPE SERVER";
 const RESET_CONFIRMATION = "RESET INSTALLATION";
-const CFG_FILES = [
-  {
-    name: "server.cfg",
-    description: "Main server variables loaded from the server identity cfg folder."
-  },
-  {
-    name: "users.cfg",
-    description: "Owner and moderator assignments."
-  },
-  {
-    name: "bans.cfg",
-    description: "Persistent player bans."
-  }
-] as const;
-const CFG_FILE_NAMES = new Set(CFG_FILES.map((file) => file.name));
-
 function rejectIncompleteSetup(res: express.Response): void {
   res.status(409).json(fail("SETUP_INCOMPLETE", SETUP_INCOMPLETE_MESSAGE));
 }
@@ -75,17 +60,6 @@ function simpleText(value: unknown, maxLength: number): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > maxLength || /[\r\n]/.test(trimmed)) return null;
   return trimmed;
-}
-
-function getCfgDirectory(deps: { storage: Storage; adapter: RustAdapter }): string {
-  const settings = deps.storage.getSettings();
-  const paths = deps.adapter.getPaths(settings);
-  return path.resolve(paths.serverDir, "server", settings.identity, "cfg");
-}
-
-function getCfgPath(deps: { storage: Storage; adapter: RustAdapter }, fileName: string): string | null {
-  if (!CFG_FILE_NAMES.has(fileName as (typeof CFG_FILES)[number]["name"])) return null;
-  return path.resolve(getCfgDirectory(deps), fileName);
 }
 
 function rejectIfSetupIncomplete(deps: { storage: Storage; adapter: RustAdapter }, res: express.Response): boolean {
@@ -282,7 +256,9 @@ export function createApiRouter(deps: {
   });
   router.get("/cfg-files", (_req, res) => {
     if (rejectIfSetupIncomplete(deps, res)) return;
-    const cfgDirectory = getCfgDirectory(deps);
+    const settings = deps.storage.getSettings();
+    ensureDefaultCfgFiles(deps.adapter, settings);
+    const cfgDirectory = getCfgDirectory(deps.adapter, settings);
     res.json(
       ok({
         directory: cfgDirectory,
@@ -300,7 +276,9 @@ export function createApiRouter(deps: {
   });
   router.get("/cfg-files/:fileName", (req, res) => {
     if (rejectIfSetupIncomplete(deps, res)) return;
-    const filePath = getCfgPath(deps, req.params.fileName);
+    const settings = deps.storage.getSettings();
+    ensureDefaultCfgFiles(deps.adapter, settings);
+    const filePath = getCfgPath(deps.adapter, settings, req.params.fileName);
     if (!filePath) {
       res.status(404).json(fail("CFG_FILE_NOT_ALLOWED", "This cfg file is not editable."));
       return;
@@ -310,7 +288,7 @@ export function createApiRouter(deps: {
   });
   router.put("/cfg-files/:fileName", (req, res) => {
     if (rejectIfSetupIncomplete(deps, res)) return;
-    const filePath = getCfgPath(deps, req.params.fileName);
+    const filePath = getCfgPath(deps.adapter, deps.storage.getSettings(), req.params.fileName);
     if (!filePath) {
       res.status(404).json(fail("CFG_FILE_NOT_ALLOWED", "This cfg file is not editable."));
       return;

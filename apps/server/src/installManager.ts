@@ -8,6 +8,7 @@ import { RustAdapter } from "@rustpilot/rust-adapter";
 import type { EventLogger } from "./logger.js";
 import type { ProcessRunner } from "./processRunner.js";
 import type { Storage } from "./storage.js";
+import { ensureDefaultCfgFiles } from "./cfgFiles.js";
 
 export class InstallManager {
   private running = false;
@@ -46,6 +47,7 @@ export class InstallManager {
       if (!fs.existsSync(paths.rustDedicatedExe)) {
         throw new Error("Installation finished, but RustDedicated.exe was not found.");
       }
+      ensureDefaultCfgFiles(this.adapter, settings);
       this.storage.setInstallationState("installed");
       this.logger.emit("steamcmd", "system", "info", "Rust Dedicated Server is installed.");
     } catch (error) {
@@ -64,6 +66,7 @@ export class InstallManager {
     try {
       this.storage.setInstallationState("updating_server");
       await this.runSteamCmdAllowingVerifiedInstall(settings);
+      ensureDefaultCfgFiles(this.adapter, settings);
       this.storage.setInstallationState("installed");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

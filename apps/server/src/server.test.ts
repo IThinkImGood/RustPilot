@@ -689,6 +689,27 @@ describe("setup-gated API actions", () => {
     }
   });
 
+  it("creates a default users.cfg with owner and moderator examples", async () => {
+    const f = fixture();
+    writeFileSync(f.paths.steamCmdExe, "");
+    writeFileSync(f.paths.rustDedicatedExe, "");
+    f.storage.setSetupCompleted(true);
+    f.storage.setInstallationState("installed");
+    const app = createTestApi(f);
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/cfg-files`);
+      expect(response.status).toBe(200);
+      const usersCfgPath = path.join(f.paths.serverDir, "server", defaultServerSettings.identity, "cfg", "users.cfg");
+      const usersCfg = readFileSync(usersCfgPath, "utf8");
+      expect(usersCfg).toContain("ownerid 76561198000000000");
+      expect(usersCfg).toContain("moderatorid 76561198000000000");
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
   it("rejects non-whitelisted cfg file names", async () => {
     const f = fixture();
     writeFileSync(f.paths.steamCmdExe, "");
