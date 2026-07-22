@@ -18,7 +18,7 @@ import { computeSetupStatus } from "./setupStatus.js";
 import { createApiRouter } from "./api.js";
 import { validateInstallDirectory } from "./installDirectoryValidation.js";
 import { WebRconClient } from "./webRconClient.js";
-import { nextDailyRunAt, RestartScheduler } from "./restartScheduler.js";
+import { buildRestartAnnouncementCommand, nextDailyRunAt, restartAnnouncementMinutes, RestartScheduler } from "./restartScheduler.js";
 
 class FakeChild extends EventEmitter {
   stdout = new PassThrough();
@@ -166,6 +166,17 @@ describe("RestartScheduler", () => {
     const now = new Date(2026, 6, 22, 7, 30, 0, 0);
     expect(nextDailyRunAt(["06:00", "14:00"], now)).toEqual(new Date(2026, 6, 22, 14, 0, 0, 0));
     expect(nextDailyRunAt(["06:00"], now)).toEqual(new Date(2026, 6, 23, 6, 0, 0, 0));
+  });
+
+  it("calculates countdown announcement windows", () => {
+    const now = new Date(2026, 6, 22, 7, 30, 0, 0);
+    expect(restartAnnouncementMinutes(new Date(2026, 6, 22, 7, 50, 0, 0), now)).toEqual([15, 5, 1]);
+    expect(restartAnnouncementMinutes(new Date(2026, 6, 22, 7, 36, 0, 0), now)).toEqual([5, 1]);
+    expect(restartAnnouncementMinutes(new Date(2026, 6, 22, 7, 30, 30, 0), now)).toEqual([]);
+  });
+
+  it("builds safe restart announcement commands", () => {
+    expect(buildRestartAnnouncementCommand(5, 'map "wipe"')).toBe('say "Server restart in 5 minutes. Reason: map \\"wipe\\""');
   });
 
   it("saves daily restart schedules", () => {

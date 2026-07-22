@@ -5,6 +5,7 @@ import type { Storage } from "./storage.js";
 
 export class RestartScheduler {
   private timer: NodeJS.Timeout | null = null;
+  private announcementTimers: NodeJS.Timeout[] = [];
   private runAt: Date | null = null;
   private reason: string | null = null;
   private kind: ScheduledRestartStatus["kind"] = "none";
@@ -82,8 +83,11 @@ export class RestartScheduler {
 
   private armTimer(runAt: Date): void {
     if (this.timer) clearTimeout(this.timer);
+    this.clearAnnouncementTimers();
+    this.armCountdownAnnouncements(runAt);
     this.timer = setTimeout(() => {
       this.timer = null;
+      this.clearAnnouncementTimers();
       const message = this.reason ? `Scheduled restart: ${this.reason}` : "Scheduled restart.";
       this.logger.emit("rustpilot", "system", "warn", message);
       if (this.kind === "one_time") this.storage.clearScheduledRestart();
@@ -102,9 +106,27 @@ export class RestartScheduler {
   private clearActiveTimer(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.clearAnnouncementTimers();
     this.runAt = null;
     this.reason = null;
     this.kind = "none";
+  }
+
+  private clearAnnouncementTimers(): void {
+    for (const timer of this.announcementTimers) clearTimeout(timer);
+    this.announcementTimers = [];
+  }
+
+  private armCountdownAnnouncements(runAt: Date): void {
+    const settings = this.storage.getSettings();
+    for (const minutes of restartAnnouncementMinutes(runAt)) {
+      const timer = setTimeout(() => {
+        this.processManager.sendConsoleCommand(settings, buildRestartAnnouncementCommand(minutes, this.reason)).catch((error) => {
+          this.logger.emit("rustpilot", "system", "warn", `Restart announcement failed: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      }, runAt.getTime() - Date.now() - minutes * 60_000);
+      this.announcementTimers.push(timer);
+    }
   }
 
   private armNextDailyRestart(): void {
@@ -116,6 +138,16 @@ export class RestartScheduler {
     this.armTimer(runAt);
     this.logger.emit("rustpilot", "system", "warn", `Next daily restart scheduled for ${runAt.toLocaleString()}.`);
   }
+}
+
+export function restartAnnouncementMinutes(runAt: Date, now = new Date()): number[] {
+  const remainingMs = runAt.getTime() - now.getTime();
+  return [15, 5, 1].filter((minutes) => remainingMs > minutes * 60_000);
+}
+
+export function buildRestartAnnouncementCommand(minutes: number, reason: string | null): string {
+  const suffix = reason ? ` Reason: ${reason}` : "";
+  return `say "${escapeRustConsoleText(`Server restart in ${minutes} minute${minutes === 1 ? "" : "s"}.${suffix}`)}"`;
 }
 
 export function nextDailyRunAt(times: string[], now = new Date()): Date {
@@ -134,4 +166,8 @@ function dateAtLocalTime(time: string, date: Date): Date {
   const result = new Date(date);
   result.setHours(Number(hoursRaw), Number(minutesRaw), 0, 0);
   return result;
+}
+
+function escapeRustConsoleText(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }

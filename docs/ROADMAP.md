@@ -9,12 +9,13 @@
 - Server information query: implemented through WebRCON command
 - Scheduled restarts: implemented as one active local scheduled restart
 - Server announcements: implemented through WebRCON `say`
+- Persist scheduled restarts across RustPilot restarts: implemented
+- Fixed daily restart schedules: implemented
+- Countdown announcements before scheduled restarts: implemented
 
 Future Phase 2 polish:
 
 - Parse player list responses into structured table rows
-- Persist scheduled restarts across RustPilot restarts
-- Add countdown announcements before scheduled restarts
 - Add safer guided forms for common admin commands
 
 ## Phase 3
