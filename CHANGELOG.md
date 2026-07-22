@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.0-alpha.5
+
+### Added
+
+- Completed the Phase 2 WebRCON baseline.
+- Added fixed daily restart schedules with local timezone handling.
+- Added countdown announcements before scheduled restarts.
+- Added guided `users.cfg` owner/moderator entry creation.
+- Added WebRCON save-world and unban actions.
+- Improved player list parsing for additional JSON and text output variants.
+
+### Changed
+
+- Moved Settings into the top navigation.
+- Polished setup, dashboard, console, player sidebar, CFG editor, and restart schedule UI.
+- Marked Phase 2 complete in the roadmap.
+
 ## v0.1.0-alpha.4
 
 ### Added

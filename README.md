@@ -4,7 +4,7 @@ RustPilot is an open-source management app for a local Rust Dedicated Server on 
 
 ## Project Status
 
-`v0.1.0-alpha.3` is an early preview that is usable for local testing and early adopters. Core functionality is present: first-run setup, install directory selection, SteamCMD download, Rust Dedicated Server installation through Steam app `258550`, SQLite settings, WebSockets, live console output, process management, and a portable Windows ZIP with `RustPilot.exe`.
+`v0.1.0-alpha.5` is an early preview that is usable for local testing and early adopters. Core functionality is present: first-run setup, install directory selection, SteamCMD download, Rust Dedicated Server installation through Steam app `258550`, SQLite settings, WebSockets, live console output, process management, WebRCON admin tools, CFG editing, scheduled restarts, and a portable Windows ZIP with `RustPilot.exe`.
 
 Do not use this version for unattended production hosting yet. Expect rough edges and test your install path before using existing server files.
 
@@ -18,7 +18,7 @@ Node.js and npm are only required when developing RustPilot from source.
 ## Download And Run
 
 1. Open the latest GitHub release.
-2. Download `RustPilot-v0.1.0-alpha.3-win-x64.zip`.
+2. Download `RustPilot-v0.1.0-alpha.5-win-x64.zip`.
 3. Extract the ZIP to a normal folder, for example `C:\RustPilot`.
 4. Start `RustPilot.exe`.
 5. Keep the console window open while using RustPilot.
