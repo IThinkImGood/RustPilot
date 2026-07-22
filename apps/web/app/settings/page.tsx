@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { defaultServerSettings } from "@rustpilot/shared/browser";
 import { api } from "../lib/api";
 import { useRustPilot } from "../lib/useRustPilot";
@@ -8,6 +8,7 @@ import { getDashboardActionStates } from "../lib/actions";
 
 export default function SettingsPage() {
   const guard = useRustPilot();
+  const restartScheduleInitialized = useRef(false);
   const [form, setForm] = useState<any>(defaultServerSettings);
   const [restartScheduleEnabled, setRestartScheduleEnabled] = useState(false);
   const [restartScheduleTimes, setRestartScheduleTimes] = useState<string[]>([]);
@@ -43,7 +44,8 @@ export default function SettingsPage() {
   }, []);
   useEffect(() => {
     const schedule = guard.status?.scheduledRestart?.schedule;
-    if (!schedule) return;
+    if (!schedule || restartScheduleInitialized.current) return;
+    restartScheduleInitialized.current = true;
     setRestartScheduleEnabled(schedule.enabled);
     setRestartScheduleTimes(schedule.times);
     setRestartScheduleReason(schedule.reason ?? "");
