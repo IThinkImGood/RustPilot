@@ -2,17 +2,12 @@
 import { useState } from "react";
 import type { RconCommandResponse } from "@rustpilot/shared/browser";
 import { api } from "./api";
+import { parseRconPlayers, type RconPlayer } from "./playerList";
 import type { StatusData } from "./useRustPilot";
 
 interface PlayerAdminPanelProps {
   status: StatusData | null;
   refresh: () => Promise<void>;
-}
-
-interface RconPlayer {
-  id: string;
-  name: string;
-  target: string;
 }
 
 export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
@@ -105,7 +100,7 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
               <button className="player-row" key={player.id} onClick={() => openPlayer(player)}>
                 <span>
                   <strong>{player.name}</strong>
-                  <small>{player.id}</small>
+                  <small>{player.id}{typeof player.ping === "number" ? ` · ${player.ping} ms` : ""}</small>
                 </span>
               </button>
             );
@@ -117,7 +112,11 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
         <div className="modal-backdrop" role="presentation">
           <section className="modal player-action-modal" role="dialog" aria-modal="true" aria-labelledby="player-action-title">
             <h2 id="player-action-title">{activePlayer.name}</h2>
-            <p className="muted">{activePlayer.id}</p>
+            <p className="muted">
+              {activePlayer.id}
+              {typeof activePlayer.ping === "number" ? ` · ${activePlayer.ping} ms` : ""}
+              {typeof activePlayer.connectedSeconds === "number" ? ` · ${formatConnected(activePlayer.connectedSeconds)}` : ""}
+            </p>
             <label>
               <span>Reason, optional</span>
               <input
@@ -144,46 +143,10 @@ export function PlayerAdminPanel({ status, refresh }: PlayerAdminPanelProps) {
   );
 }
 
-function parseRconPlayers(message: string): RconPlayer[] {
-  const trimmed = message.trim();
-  if (!trimmed) return [];
-  const jsonPlayers = parseJsonPlayers(trimmed);
-  if (jsonPlayers.length > 0) return jsonPlayers;
-  return parseTextPlayers(trimmed);
-}
-
-function parseJsonPlayers(message: string): RconPlayer[] {
-  try {
-    const parsed = JSON.parse(message);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((item, index) => {
-      const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
-      const steamId = stringValue(record.SteamID) ?? stringValue(record.steamid) ?? stringValue(record.id) ?? String(index + 1);
-      const name = stringValue(record.DisplayName) ?? stringValue(record.displayName) ?? stringValue(record.name) ?? steamId;
-      return { id: steamId, name, target: steamId };
-    });
-  } catch {
-    return [];
-  }
-}
-
-function parseTextPlayers(message: string): RconPlayer[] {
-  return message
-    .split(/\r?\n/)
-    .map((line, index) => {
-      const text = line.trim();
-      if (!text || /^playerlist/i.test(text)) return null;
-      const steamId = text.match(/\b\d{15,20}\b/)?.[0];
-      const withoutPrefix = text.replace(/^\d+[).:-]?\s*/, "").trim();
-      const name = withoutPrefix.replace(/\b\d{15,20}\b/g, "").replace(/[(),-]+$/g, "").trim() || steamId || text;
-      const id = steamId ?? `${index}-${name}`;
-      return { id, name, target: steamId ?? name };
-    })
-    .filter((player): player is RconPlayer => player !== null);
-}
-
-function stringValue(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (typeof value === "number") return String(value);
-  return null;
+function formatConnected(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return "connected <1m";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 1) return `connected ${minutes}m`;
+  return `connected ${hours}h ${minutes % 60}m`;
 }

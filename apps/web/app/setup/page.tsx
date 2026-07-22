@@ -143,12 +143,18 @@ export default function SetupPage() {
   }, [form, installDirectoryChoice, step]);
   return (
     <div className="wizard">
-      <div className="topbar">
-        <h1>Setup</h1>
-        <span className="status">Step {step} of 5</span>
+      <div className="setup-topbar">
+        <div>
+          <span className="setup-eyebrow">First run</span>
+          <h1>Setup</h1>
+        </div>
+        <div className="setup-step-pill">
+          <span>Step {step} of 5</span>
+          <div><span style={{ width: `${(step / 5) * 100}%` }} /></div>
+        </div>
       </div>
       {step === 1 && (
-        <section className="panel">
+        <section className="panel setup-panel setup-welcome-panel">
           <h2>Welcome to RustPilot</h2>
           <p>RustPilot manages a local Rust Dedicated Server from a long-running console application with a local web panel.</p>
           <p>SteamCMD and Rust Dedicated Server are downloaded directly from Valve. RustPilot does not redistribute server files.</p>
@@ -172,7 +178,7 @@ export default function SetupPage() {
         </section>
       )}
       {step === 2 && (
-        <form className="panel" onSubmit={save}>
+        <form className="panel setup-panel" onSubmit={save}>
           <div className="setup-form-sections">
             <section className="setup-form-section">
               <div className="setup-section-heading">
@@ -298,7 +304,7 @@ export default function SetupPage() {
         </form>
       )}
       {step === 3 && (
-        <section className="panel">
+        <section className="panel setup-panel">
           <h2>Review</h2>
           <div className="metric"><span>Hostname</span><strong>{form.hostname}</strong></div>
           <div className="metric"><span>Identity</span><strong>{form.identity}</strong></div>
@@ -345,7 +351,7 @@ export default function SetupPage() {
         </section>
       )}
       {step === 4 && (
-        <section className="panel">
+        <section className="panel setup-panel">
           <h2>Installation</h2>
           <p>Installation status: <strong>{status?.setup?.installationState}</strong></p>
           {status?.setup?.message && <p className="muted">{status.setup.message}</p>}
@@ -370,7 +376,7 @@ export default function SetupPage() {
         </section>
       )}
       {step === 5 && (
-        <section className="panel">
+        <section className="panel setup-panel">
           <h2>Complete</h2>
           <p>SteamCMD: {status?.setup?.steamCmdInstalled ? "found" : "missing"}</p>
           <p>RustDedicated.exe: {status?.setup?.rustExecutableExists ? "found" : "missing"}</p>

@@ -760,28 +760,33 @@ label {
 }
 
 .validation-message {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   min-height: 16px;
   font-size: 12px;
   line-height: 1.35;
+  font-weight: 700;
 }
 
 .validation-message.ok {
-  color: var(--ok);
+  color: #66d28f;
 }
 
 .validation-message.error {
-  color: var(--danger);
+  color: #ff765f;
 }
 
 .validation-message.warn {
-  color: var(--warn);
+  color: #f3cc3f;
 }
 
 .install-check {
   margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel-2);
 }
 
 .install-directory-intro {
@@ -805,9 +810,9 @@ label {
   gap: 8px;
   margin: 12px 0;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--admin-line);
   border-radius: 8px;
-  background: var(--panel-2);
+  background: #1b1d21;
 }
 
 .choice-panel p {
@@ -1074,7 +1079,9 @@ textarea {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
-  min-height: calc(100vh - 124px);
+  height: calc(100vh - 108px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .console-panel-header {
@@ -1317,15 +1324,19 @@ textarea {
 
 .setup-shell {
   min-height: 100vh;
-  width: min(100%, 1060px);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 28px;
+  background: var(--admin-bg);
+  color: var(--admin-text);
 }
 
 .setup-brand {
-  font-size: 24px;
+  width: min(100%, 1080px);
+  margin: 0 auto 22px;
+  color: var(--rust-accent-strong);
+  font-size: 25px;
   font-weight: 700;
-  margin-bottom: 18px;
 }
 
 .dev-redirect {
@@ -1341,25 +1352,135 @@ textarea {
 }
 
 .wizard {
-  max-width: 980px;
+  max-width: 1080px;
   margin: 0 auto;
+}
+
+.setup-topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.setup-topbar h1 {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 30px;
+}
+
+.setup-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--rust-accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.setup-step-pill {
+  display: grid;
+  gap: 7px;
+  min-width: 160px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel);
+  padding: 10px 12px;
+  color: var(--admin-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.setup-step-pill > div {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #17191d;
+}
+
+.setup-step-pill > div span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--rust-accent), #ef7d61);
+}
+
+.setup-panel {
+  background: var(--admin-panel);
+  border-color: var(--admin-line);
+  color: var(--admin-text);
+}
+
+.setup-panel h2,
+.setup-panel h3 {
+  color: var(--admin-text);
+}
+
+.setup-panel .metric {
+  border-color: var(--admin-line);
+}
+
+.setup-panel .muted,
+.setup-panel label,
+.setup-panel .setup-section-heading p {
+  color: var(--admin-muted);
+}
+
+.setup-panel input,
+.setup-panel textarea,
+.setup-panel select {
+  border-color: var(--admin-line);
+  background: var(--admin-panel-2);
+  color: var(--admin-text);
+}
+
+.setup-panel input::placeholder,
+.setup-panel textarea::placeholder {
+  color: #7f858e;
+}
+
+.setup-panel input:focus,
+.setup-panel textarea:focus {
+  border-color: #555a64;
+  outline: none;
+  background: #22242a;
+}
+
+.setup-panel button {
+  border-color: var(--admin-line);
+  background: var(--admin-panel-2);
+  color: var(--admin-text);
+  font-weight: 700;
+}
+
+.setup-panel button:hover:not(:disabled) {
+  background: #2b2d31;
+}
+
+.setup-panel button.primary {
+  background: var(--rust-accent);
+  border-color: var(--rust-accent);
+  color: #fff;
+}
+
+.setup-welcome-panel {
+  display: grid;
+  gap: 12px;
 }
 
 .setup-form-sections {
   display: grid;
-  gap: 22px;
+  gap: 14px;
 }
 
 .setup-form-section {
   display: grid;
   gap: 12px;
-  border-top: 1px solid var(--line);
-  padding-top: 18px;
-}
-
-.setup-form-section:first-child {
-  border-top: 0;
-  padding-top: 0;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel-2);
+  padding: 14px;
 }
 
 .setup-section-heading {
@@ -1375,7 +1496,7 @@ textarea {
 
 .setup-section-heading p {
   margin: 0;
-  color: var(--muted);
+  color: var(--admin-muted);
   font-size: 13px;
 }
 
@@ -1406,10 +1527,11 @@ textarea {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   min-height: 48px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
   padding: 10px 12px;
-  color: var(--text);
+  background: #1b1d21;
+  color: var(--admin-text);
 }
 
 .checkbox-field input {
