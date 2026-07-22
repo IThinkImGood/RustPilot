@@ -115,6 +115,54 @@ describe("InstallManager", () => {
   });
 });
 
+describe("RestartScheduler", () => {
+  function fakeProcessManager() {
+    return {
+      restart: async () => undefined
+    } as unknown as ServerProcessManager;
+  }
+
+  it("persists scheduled restarts", () => {
+    const f = fixture();
+    try {
+      const scheduler = new RestartScheduler(f.storage, fakeProcessManager(), f.logger);
+      const status = scheduler.schedule(30, "maintenance");
+      const persisted = f.storage.getScheduledRestart();
+      expect(status.scheduled).toBe(true);
+      expect(persisted?.runAt).toBe(status.runAt);
+      expect(persisted?.reason).toBe("maintenance");
+      scheduler.cancel();
+    } finally {
+      f.cleanup();
+    }
+  });
+
+  it("restores future scheduled restarts from storage", () => {
+    const f = fixture();
+    try {
+      const runAt = new Date(Date.now() + 30 * 60_000).toISOString();
+      f.storage.saveScheduledRestart(runAt, "restore test");
+      const scheduler = new RestartScheduler(f.storage, fakeProcessManager(), f.logger);
+      expect(scheduler.getStatus()).toEqual({ scheduled: true, runAt, reason: "restore test" });
+      scheduler.cancel();
+    } finally {
+      f.cleanup();
+    }
+  });
+
+  it("clears expired scheduled restarts on restore", () => {
+    const f = fixture();
+    try {
+      f.storage.saveScheduledRestart(new Date(Date.now() - 60_000).toISOString(), "expired");
+      const scheduler = new RestartScheduler(f.storage, fakeProcessManager(), f.logger);
+      expect(scheduler.getStatus()).toEqual({ scheduled: false, runAt: null, reason: null });
+      expect(f.storage.getScheduledRestart()).toBeNull();
+    } finally {
+      f.cleanup();
+    }
+  });
+});
+
 describe("WebRconClient", () => {
   it("sends JSON commands and matches responses by identifier", async () => {
     const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });

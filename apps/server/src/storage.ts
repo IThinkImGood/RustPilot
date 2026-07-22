@@ -122,6 +122,33 @@ export class Storage {
       .run(new Date().toISOString(), exitCode, signal, crashed ? 1 : 0, new Date().toISOString());
   }
 
+  getScheduledRestart(): { runAt: string; reason: string | null } | null {
+    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'scheduled_restart'").get() as
+      | { value: string }
+      | undefined;
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.value) as { runAt?: unknown; reason?: unknown };
+      if (typeof parsed.runAt !== "string") return null;
+      return {
+        runAt: parsed.runAt,
+        reason: typeof parsed.reason === "string" && parsed.reason.trim() ? parsed.reason : null
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  saveScheduledRestart(runAt: string, reason: string | null): void {
+    this.db
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('scheduled_restart', ?)")
+      .run(JSON.stringify({ runAt, reason }));
+  }
+
+  clearScheduledRestart(): void {
+    this.db.prepare("DELETE FROM meta WHERE key = 'scheduled_restart'").run();
+  }
+
   getRuntimeMeta(): {
     lastStart: string | null;
     lastStop: string | null;
