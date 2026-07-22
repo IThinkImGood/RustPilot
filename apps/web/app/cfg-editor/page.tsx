@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { ProtectedPage } from "../lib/ProtectedPage";
 import { useRustPilot } from "../lib/useRustPilot";
+import { buildUsersCfgLine, type UsersCfgRole } from "../lib/usersCfg";
 
 interface CfgFileSummary {
   name: string;
@@ -32,6 +33,11 @@ export default function CfgEditorPage() {
   const [message, setMessage] = useState("");
   const [messageKind, setMessageKind] = useState<"ok" | "error">("ok");
   const [busy, setBusy] = useState<string | null>(null);
+  const [usersRole, setUsersRole] = useState<UsersCfgRole>("ownerid");
+  const [usersSteamId, setUsersSteamId] = useState("");
+  const [usersName, setUsersName] = useState("");
+  const [usersNote, setUsersNote] = useState("");
+  const [usersCfgMessage, setUsersCfgMessage] = useState("");
   const dirty = content !== originalContent;
   const selectedSummary = files.find((file) => file.name === selectedFile);
 
@@ -91,6 +97,22 @@ export default function CfgEditorPage() {
     }
   }
 
+  function insertUsersCfgLine() {
+    setUsersCfgMessage("");
+    try {
+      const line = buildUsersCfgLine(usersRole, usersSteamId, usersName, usersNote);
+      setContent((current) => {
+        const prefix = current.trimEnd();
+        return `${prefix}${prefix ? "\n" : ""}${line}\n`;
+      });
+      setUsersSteamId("");
+      setUsersName("");
+      setUsersNote("");
+    } catch (error) {
+      setUsersCfgMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   useEffect(() => {
     if (guard.status?.setup?.setupCompleted) void loadList();
   }, [guard.status?.setup?.setupCompleted]);
@@ -121,7 +143,38 @@ export default function CfgEditorPage() {
           </label>
           <p className="cfg-file-description">{selectedSummary?.description ?? "Select a cfg file."}</p>
         </div>
-        <div className="cfg-editor-main">
+        <div className={`cfg-editor-main ${selectedFile === "users.cfg" ? "with-helper" : ""}`}>
+          {selectedFile === "users.cfg" && (
+            <section className="cfg-users-helper" aria-label="Add owner or moderator">
+              <div>
+                <strong>Add admin user</strong>
+                <span>Insert a Rust ownerid or moderatorid line, then save and restart the server.</span>
+              </div>
+              <div className="cfg-users-helper-grid">
+                <label>
+                  Role
+                  <select value={usersRole} onChange={(event) => setUsersRole(event.target.value as UsersCfgRole)}>
+                    <option value="ownerid">Owner</option>
+                    <option value="moderatorid">Moderator</option>
+                  </select>
+                </label>
+                <label>
+                  SteamID64
+                  <input value={usersSteamId} onChange={(event) => setUsersSteamId(event.target.value)} placeholder="76561198000000000" />
+                </label>
+                <label>
+                  Player name
+                  <input value={usersName} onChange={(event) => setUsersName(event.target.value)} placeholder="Optional" />
+                </label>
+                <label>
+                  Note
+                  <input value={usersNote} onChange={(event) => setUsersNote(event.target.value)} placeholder={usersRole === "ownerid" ? "Owner" : "Moderator"} />
+                </label>
+                <button type="button" className="primary" onClick={insertUsersCfgLine}>Insert line</button>
+              </div>
+              {usersCfgMessage && <span className="validation-message error">{usersCfgMessage}</span>}
+            </section>
+          )}
           <textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}

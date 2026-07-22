@@ -1010,6 +1010,46 @@ label {
   min-height: 0;
 }
 
+.cfg-editor-main.with-helper {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.cfg-users-helper {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: var(--admin-panel-2);
+  padding: 12px;
+}
+
+.cfg-users-helper > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.cfg-users-helper strong {
+  color: var(--admin-text);
+  font-size: 15px;
+}
+
+.cfg-users-helper span {
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.cfg-users-helper-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 150px) minmax(190px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.cfg-users-helper-grid button {
+  min-height: 39px;
+  white-space: nowrap;
+}
+
 .cfg-editor-main textarea {
   min-height: 0;
   height: 100%;
@@ -1703,6 +1743,9 @@ textarea {
     display: grid;
   }
   .cfg-editor-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .cfg-users-helper-grid {
     grid-template-columns: 1fr;
   }
   .path-metric {
