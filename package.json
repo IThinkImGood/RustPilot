@@ -1,6 +1,6 @@
 {
   "name": "rustpilot",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "private": true,
   "type": "module",
   "description": "Open-source management app for local Rust Dedicated Servers.",

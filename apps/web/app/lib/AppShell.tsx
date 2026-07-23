@@ -1,6 +1,6 @@
 "use client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBoxArchive, faClockRotateLeft, faFileCode, faFileLines, faGear, faGaugeHigh, faHand, faSkullCrossbones, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBoxArchive, faClockRotateLeft, faFileCode, faFileLines, faGear, faGaugeHigh, faHand, faRotate, faSkullCrossbones, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -19,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const redirectTarget = shouldRedirectForSetup(pathname, setupCompleted);
   const activePath = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
   const backupsActive = activePath === "/backups" || activePath.startsWith("/backups/");
+  const wipesActive = activePath === "/wipes" || activePath.startsWith("/wipes/");
 
   useEffect(() => {
     if (!loading && !error && redirectTarget && redirectTarget !== pathname) {
@@ -95,10 +96,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
             </div>
-            <Link href="/wipes" className={activePath === "/wipes" ? "active" : undefined}>
-              <FontAwesomeIcon className="nav-link-icon" icon={faSkullCrossbones} fixedWidth />
-              <span>Wipes</span>
-            </Link>
+            <div className="top-nav-dropdown">
+              <Link href="/wipes" className={wipesActive ? "active" : undefined}>
+                <FontAwesomeIcon className="nav-link-icon" icon={faSkullCrossbones} fixedWidth />
+                <span>Wipes</span>
+              </Link>
+              <div className="top-nav-menu">
+                <Link href="/wipes" className={activePath === "/wipes" ? "active" : undefined}>
+                  <FontAwesomeIcon className="nav-link-icon" icon={faSkullCrossbones} fixedWidth />
+                  <span>Official</span>
+                </Link>
+                <Link href="/wipes/custom" className={activePath === "/wipes/custom" ? "active" : undefined}>
+                  <FontAwesomeIcon className="nav-link-icon" icon={faClockRotateLeft} fixedWidth />
+                  <span>Custom</span>
+                </Link>
+                <Link href="/wipes/history" className={activePath === "/wipes/history" ? "active" : undefined}>
+                  <FontAwesomeIcon className="nav-link-icon" icon={faRotate} fixedWidth />
+                  <span>Run & History</span>
+                </Link>
+              </div>
+            </div>
           </div>
         </header>
         <nav className="nav">

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { defaultWipePlannerConfig, type WipeCustomSchedule, type WipeKind, type WipePlannerConfig, type WipePlannerStatus, type WipeResult, type WipeSeedMode } from "@rustpilot/shared/browser";
+import { usePathname } from "next/navigation";
 import { api } from "../lib/api";
 import { formatLocalDateTime, shortenPath } from "../lib/format";
 import { ProtectedPage } from "../lib/ProtectedPage";
@@ -55,6 +56,9 @@ function fromIsoToLocalInput(value: string | null | undefined): string {
 
 export default function WipesPage() {
   const guard = useRustPilot();
+  const pathname = usePathname();
+  const activePath = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
+  const wipeView = activePath === "/wipes/custom" ? "custom" : activePath === "/wipes/history" ? "history" : "official";
   const [status, setStatus] = useState<WipePlannerStatus | null>(null);
   const [config, setConfig] = useState<WipePlannerConfig>(defaultWipePlannerConfig);
   const [oneTimeRunAt, setOneTimeRunAt] = useState(localDateTimeValue());
@@ -62,6 +66,7 @@ export default function WipesPage() {
   const [action, setAction] = useState<"load" | "save" | "cancel" | "run" | null>(null);
   const [message, setMessage] = useState("");
   const [messageKind, setMessageKind] = useState<"ok" | "error">("ok");
+  const [confirmRunNow, setConfirmRunNow] = useState(false);
 
   async function loadStatus() {
     setAction("load");
@@ -126,7 +131,6 @@ export default function WipesPage() {
   }
 
   async function runNow() {
-    if (!window.confirm(`Run ${wipeKindLabels[runNowKind]} wipe now? The server will be stopped first.`)) return;
     setAction("run");
     setMessage("");
     setMessageKind("ok");
@@ -140,6 +144,7 @@ export default function WipesPage() {
           restartAfterWipe: config.custom.restartAfterWipe
         })
       });
+      setConfirmRunNow(false);
       await loadStatus();
       setMessage(`Wipe completed. Removed ${result.removedFiles.length} file${result.removedFiles.length === 1 ? "" : "s"}.`);
     } catch (error) {
@@ -167,17 +172,17 @@ export default function WipesPage() {
       <section className="card wipes-panel">
         <div className="wipes-header">
           <div>
-            <h2>Wipe planner</h2>
-            <p className="muted">Rust releases its monthly update and forced map wipe on the first Thursday of each month.</p>
+            <h2>Wipes</h2>
+            <p className="muted">{status?.scheduled ? `Next planned wipe: ${formatLocalDateTime(status.runAt)}` : "No wipe planned."}</p>
           </div>
-          <span className="badge">{status?.scheduled ? `Next: ${formatLocalDateTime(status.runAt)}` : "No wipe planned"}</span>
+          <button type="button" onClick={loadStatus} disabled={action !== null}>{action === "load" ? "Refreshing..." : "Refresh"}</button>
         </div>
 
-        <section className="wipe-section">
+        {wipeView === "official" && <section className="wipe-section">
           <div className="wipe-section-heading">
             <div>
-              <h3>Official Rust force wipe <span className="badge recommended">Recommended</span></h3>
-              <p className="muted">Follows Facepunch's default monthly wipe timer: first Thursday at 19:00 Europe/London.</p>
+              <h3>Official force wipe <span className="badge recommended">Recommended</span></h3>
+              <p className="muted">First Thursday every month. RustPilot updates before wiping.</p>
             </div>
             <span className="badge">{config.official.enabled ? "Enabled" : "Disabled"}</span>
           </div>
@@ -221,13 +226,13 @@ export default function WipesPage() {
               <input type="checkbox" checked={config.official.restartAfterWipe} onChange={(event) => updateOfficial({ restartAfterWipe: event.target.checked })} />
             </label>
           </div>
-        </section>
+        </section>}
 
-        <section className="wipe-section">
+        {wipeView === "custom" && <section className="wipe-section">
           <div className="wipe-section-heading">
             <div>
-              <h3>Additional custom wipes</h3>
-              <p className="muted">Custom wipes run alongside the official force wipe. Monthly custom means first selected weekday of the month, not the official Rust update.</p>
+              <h3>Custom wipe schedule</h3>
+              <p className="muted">Optional extra wipes. Official force wipe remains separate.</p>
             </div>
             <span className="badge">{scheduleLabels[config.custom.schedule]}</span>
           </div>
@@ -317,26 +322,33 @@ export default function WipesPage() {
               <input type="checkbox" checked={config.custom.restartAfterWipe} onChange={(event) => updateCustom({ restartAfterWipe: event.target.checked })} />
             </label>
           </div>
-        </section>
+        </section>}
 
         <div className="actions">
-          <button type="button" className="primary" onClick={saveConfig} disabled={action !== null}>{action === "save" ? "Saving..." : "Save wipe planner"}</button>
-          <button type="button" onClick={cancelCustomSchedule} disabled={action !== null || config.custom.schedule === "none"}>{action === "cancel" ? "Clearing..." : "Clear custom schedule"}</button>
-          <select value={runNowKind} onChange={(event) => setRunNowKind(event.target.value as WipeKind)} aria-label="Run now wipe contents">
-            <option value="map">Map only</option>
-            <option value="map_and_blueprints">Map + blueprints</option>
-            <option value="blueprints">Blueprints only</option>
-          </select>
-          <button type="button" className="danger" onClick={runNow} disabled={action !== null}>{action === "run" ? "Wiping..." : "Run custom wipe now"}</button>
-          <button type="button" onClick={loadStatus} disabled={action !== null}>Refresh</button>
+          {wipeView !== "history" && (
+            <button type="button" className="primary" onClick={saveConfig} disabled={action !== null}>{action === "save" ? "Saving..." : "Save wipe planner"}</button>
+          )}
+          {wipeView === "custom" && (
+            <button type="button" onClick={cancelCustomSchedule} disabled={action !== null || config.custom.schedule === "none"}>{action === "cancel" ? "Clearing..." : "Clear custom schedule"}</button>
+          )}
+          {wipeView === "history" && (
+            <>
+              <select value={runNowKind} onChange={(event) => setRunNowKind(event.target.value as WipeKind)} aria-label="Run now wipe contents">
+                <option value="map">Map only</option>
+                <option value="map_and_blueprints">Map + blueprints</option>
+                <option value="blueprints">Blueprints only</option>
+              </select>
+              <button type="button" className="danger" onClick={() => setConfirmRunNow(true)} disabled={action !== null}>{action === "run" ? "Wiping..." : "Run custom wipe now"}</button>
+            </>
+          )}
           {message && <span className={`validation-message ${messageKind}`}>{message}</span>}
         </div>
 
-        {status?.customReplacedByOfficial && (
+        {wipeView === "custom" && status?.customReplacedByOfficial && (
           <p className="validation-message ok">The custom wipe is within the conflict window and will be combined with the official Rust force wipe.</p>
         )}
 
-        <div className="wipe-status-grid">
+        {wipeView === "history" && <div className="wipe-status-grid">
           <section>
             <h3>Next planned action</h3>
             <div className="metric"><span>Source</span><strong>{status?.source ?? "n/a"}</strong></div>
@@ -356,13 +368,30 @@ export default function WipesPage() {
             <div className="metric"><span>Seed</span><strong>{status?.lastResult?.seed ?? "n/a"}</strong></div>
             <div className="metric"><span>Last error</span><strong>{status?.lastError ?? "n/a"}</strong></div>
           </section>
-        </div>
-        {status?.lastResult && status.lastResult.removedFiles.length > 0 && (
+        </div>}
+        {wipeView === "history" && status?.lastResult && status.lastResult.removedFiles.length > 0 && (
           <div className="wipe-removed-list">
             <h3>Removed files</h3>
             {status.lastResult.removedFiles.map((file) => (
               <span key={file} title={file}>{shortenPath(file, 90)}</span>
             ))}
+          </div>
+        )}
+        {confirmRunNow && (
+          <div className="modal-backdrop" role="presentation">
+            <section className="modal danger-modal" role="dialog" aria-modal="true" aria-labelledby="wipe-now-title">
+              <h2 id="wipe-now-title">Run custom wipe now</h2>
+              <p className="muted">This stops the server first and immediately runs the selected wipe action.</p>
+              <div className="metric"><span>Wipe contents</span><strong>{wipeKindLabels[runNowKind]}</strong></div>
+              <div className="metric"><span>Backup before wipe</span><strong>{config.custom.backupBeforeWipe ? "yes" : "no"}</strong></div>
+              <div className="metric"><span>Restart after wipe</span><strong>{config.custom.restartAfterWipe ? "yes" : "no"}</strong></div>
+              <div className="actions">
+                <button type="button" onClick={() => setConfirmRunNow(false)} disabled={action !== null}>Cancel</button>
+                <button type="button" className="danger" onClick={runNow} disabled={action !== null}>
+                  {action === "run" ? "Wiping..." : "Run wipe"}
+                </button>
+              </div>
+            </section>
           </div>
         )}
       </section>

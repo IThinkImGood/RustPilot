@@ -26,6 +26,8 @@ describe("route setup guard decisions", () => {
 
   it("blocks wipes when setup is incomplete", () => {
     expect(getSetupRedirectTarget("/wipes", false)).toBe("/setup");
+    expect(getSetupRedirectTarget("/wipes/custom", false)).toBe("/setup");
+    expect(getSetupRedirectTarget("/wipes/history", false)).toBe("/setup");
   });
 
   it("blocks logs when setup is incomplete", () => {

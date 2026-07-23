@@ -26,6 +26,9 @@ export default function ManualBackupsPage() {
   const [action, setAction] = useState<"create" | "refresh" | null>(null);
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null);
   const [restoringFileName, setRestoringFileName] = useState<string | null>(null);
+  const [confirmingBackup, setConfirmingBackup] = useState<{ kind: "delete" | "restore"; backup: BackupSummary } | null>(null);
+  const [confirmationText, setConfirmationText] = useState("");
+  const requiredConfirmation = confirmingBackup?.kind === "restore" ? "RESTORE BACKUP" : "";
 
   async function loadBackups() {
     setAction("refresh");
@@ -62,14 +65,29 @@ export default function ManualBackupsPage() {
     await navigator.clipboard.writeText(value);
   }
 
+  function openDeleteBackup(backup: BackupSummary) {
+    setConfirmingBackup({ kind: "delete", backup });
+    setConfirmationText("");
+  }
+
+  function openRestoreBackup(backup: BackupSummary) {
+    setConfirmingBackup({ kind: "restore", backup });
+    setConfirmationText("");
+  }
+
+  function closeConfirmation() {
+    setConfirmingBackup(null);
+    setConfirmationText("");
+  }
+
   async function deleteBackup(backup: BackupSummary) {
-    if (!window.confirm(`Delete backup ${backup.fileName}?`)) return;
     setDeletingFileName(backup.fileName);
     setMessage("");
     setMessageKind("ok");
     try {
       await api(`/backups/${encodeURIComponent(backup.fileName)}`, { method: "DELETE" });
       setBackups((current) => current.filter((item) => item.fileName !== backup.fileName));
+      closeConfirmation();
       setMessage("Backup deleted.");
     } catch (error) {
       setMessageKind("error");
@@ -80,16 +98,15 @@ export default function ManualBackupsPage() {
   }
 
   async function restoreBackup(backup: BackupSummary) {
-    const confirmation = window.prompt(`Restore ${backup.fileName}? This stops the server and replaces the current identity data. Type RESTORE BACKUP to confirm.`);
-    if (confirmation !== "RESTORE BACKUP") return;
     setRestoringFileName(backup.fileName);
     setMessage("");
     setMessageKind("ok");
     try {
       const result = await api<BackupRestoreResult>(`/backups/${encodeURIComponent(backup.fileName)}/restore`, {
         method: "POST",
-        body: JSON.stringify({ confirmation })
+        body: JSON.stringify({ confirmation: "RESTORE BACKUP" })
       });
+      closeConfirmation();
       setMessage(`Backup restored. ${result.restoredFiles.length} file${result.restoredFiles.length === 1 ? "" : "s"} restored.${result.safetyBackup ? ` Safety backup: ${result.safetyBackup.fileName}` : ""}`);
       await loadBackups();
       await guard.refresh();
@@ -135,10 +152,10 @@ export default function ManualBackupsPage() {
                   </div>
                   <span className="path-value" title={backup.path}>{shortenPath(backup.path, 58)}</span>
                   <button type="button" className="icon-button" onClick={() => copyText(backup.path)}>Copy path</button>
-                  <button type="button" className="icon-button" onClick={() => restoreBackup(backup)} disabled={restoringFileName === backup.fileName}>
+                  <button type="button" className="icon-button" onClick={() => openRestoreBackup(backup)} disabled={restoringFileName === backup.fileName}>
                     {restoringFileName === backup.fileName ? "Restoring..." : "Restore"}
                   </button>
-                  <button type="button" className="danger icon-button" onClick={() => deleteBackup(backup)} disabled={deletingFileName === backup.fileName}>
+                  <button type="button" className="danger icon-button" onClick={() => openDeleteBackup(backup)} disabled={deletingFileName === backup.fileName}>
                     {deletingFileName === backup.fileName ? "Deleting..." : "Delete"}
                   </button>
                 </div>
@@ -147,6 +164,37 @@ export default function ManualBackupsPage() {
           )}
         </div>
         {message && <p className={`validation-message ${messageKind}`}>{message}</p>}
+        {confirmingBackup && (
+          <div className="modal-backdrop" role="presentation">
+            <section className="modal danger-modal" role="dialog" aria-modal="true" aria-labelledby="backup-confirm-title">
+              <h2 id="backup-confirm-title">{confirmingBackup.kind === "restore" ? "Restore backup" : "Delete backup"}</h2>
+              <p className="muted">
+                {confirmingBackup.kind === "restore"
+                  ? "This stops the server and replaces the current identity data with the selected backup."
+                  : "This permanently removes the selected backup file."}
+              </p>
+              <p><strong>{confirmingBackup.backup.fileName}</strong></p>
+              {confirmingBackup.kind === "restore" && (
+                <label>
+                  <span>Type <strong>{requiredConfirmation}</strong> to confirm</span>
+                  <input autoFocus value={confirmationText} onChange={(event) => setConfirmationText(event.target.value)} />
+                </label>
+              )}
+              <div className="actions">
+                <button type="button" onClick={closeConfirmation} disabled={deletingFileName !== null || restoringFileName !== null}>Cancel</button>
+                {confirmingBackup.kind === "restore" ? (
+                  <button type="button" className="danger" onClick={() => restoreBackup(confirmingBackup.backup)} disabled={confirmationText !== requiredConfirmation || restoringFileName !== null}>
+                    {restoringFileName ? "Restoring..." : "Restore backup"}
+                  </button>
+                ) : (
+                  <button type="button" className="danger" onClick={() => deleteBackup(confirmingBackup.backup)} disabled={deletingFileName !== null}>
+                    {deletingFileName ? "Deleting..." : "Delete backup"}
+                  </button>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
       </section>
     </ProtectedPage>
   );

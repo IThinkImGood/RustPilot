@@ -7,24 +7,23 @@ import { ProtectedPage } from "../lib/ProtectedPage";
 import { useRustPilot } from "../lib/useRustPilot";
 
 type LogMode = "live" | "log";
-type FilterKey = "joins" | "leaves" | "chat" | "deaths" | "menu" | "explosions" | "commands" | "system";
+type FilterKey = "rustpilot" | "steamcmd" | "server" | "commands" | "warnings" | "players" | "chat";
 
 interface LogLine {
   id: string;
   text: string;
   timestamp: string | null;
-  category: FilterKey;
+  categories: FilterKey[];
 }
 
 const filters: Array<{ key: FilterKey; label: string }> = [
-  { key: "joins", label: "Player Joins" },
-  { key: "leaves", label: "Player Leaves" },
-  { key: "chat", label: "Chat Messages" },
-  { key: "deaths", label: "Player Death" },
-  { key: "menu", label: "Menu Actions" },
-  { key: "explosions", label: "Explosions" },
+  { key: "rustpilot", label: "RustPilot" },
+  { key: "steamcmd", label: "SteamCMD" },
+  { key: "server", label: "Rust server" },
   { key: "commands", label: "Commands" },
-  { key: "system", label: "System Events" }
+  { key: "warnings", label: "Warnings/errors" },
+  { key: "players", label: "Player activity" },
+  { key: "chat", label: "Chat" }
 ];
 
 const initialFilters: Record<FilterKey, boolean> = filters.reduce(
@@ -45,16 +44,17 @@ function formatTime(value: string | null): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function categorizeLine(text: string, event?: ConsoleEvent): FilterKey {
-  const lower = text.toLowerCase();
-  if (/\bjoined\b|joined with identifiers/.test(lower)) return "joins";
-  if (/\bdisconnected\b|\bdisconnect\b|\bleft\b|\bexiting\b/.test(lower)) return "leaves";
-  if (/\bsaid\b|chat message|chat:/.test(lower)) return "chat";
-  if (/\bdied\b|\bkilled\b|was killed|death/.test(lower)) return "deaths";
-  if (/\bmenu\b|noclip|became mortal|admin action/.test(lower)) return "menu";
-  if (/explosion|explosive|rocket|grenade|satchel|c4/.test(lower)) return "explosions";
-  if (event?.stream === "input" || /\bcommand\b|^>/i.test(text)) return "commands";
-  return "system";
+function categorizeLine(text: string, event?: ConsoleEvent): FilterKey[] {
+  const categories = new Set<FilterKey>();
+  const source = event?.source ?? (/\[SteamCMD\]/i.test(text) ? "steamcmd" : /\[Server\]/i.test(text) ? "rust-server" : "rustpilot");
+  if (source === "rustpilot") categories.add("rustpilot");
+  if (source === "steamcmd") categories.add("steamcmd");
+  if (source === "rust-server") categories.add("server");
+  if (event?.stream === "input" || /\[(server|rust server)\].*?\b(server\.|global\.|chat\.|quit|save|status)\b/i.test(text)) categories.add("commands");
+  if (event?.level === "warn" || event?.level === "error" || /\b(error|warn|failed|crash|timeout|refused|exception|stderr)\b/i.test(text)) categories.add("warnings");
+  if (/\b(joined|connected|disconnected|kicked|banned|unbanned)\b/i.test(text)) categories.add("players");
+  if (/\b(said|chat|say)\b/i.test(text)) categories.add("chat");
+  return Array.from(categories);
 }
 
 function lineFromEvent(event: ConsoleEvent): LogLine {
@@ -64,7 +64,7 @@ function lineFromEvent(event: ConsoleEvent): LogLine {
     id: `event-${event.id}`,
     text,
     timestamp: event.timestamp,
-    category: categorizeLine(text, event)
+    categories: categorizeLine(text, event)
   };
 }
 
@@ -76,7 +76,7 @@ function lineFromDisk(raw: string, index: number): LogLine {
     id: `disk-${index}`,
     text,
     timestamp: null,
-    category: categorizeLine(text)
+    categories: categorizeLine(text)
   };
 }
 
@@ -169,7 +169,7 @@ export default function LogsPage() {
   );
   const allLines = mode === "live" ? liveLines : diskLines;
   const currentViewKey = mode === "live" ? "live" : `log:${selectedFile}:${content?.file.modifiedAt ?? ""}`;
-  const visibleLines = clearedViewKey === currentViewKey ? [] : allLines.filter((line) => enabledFilters[line.category]);
+  const visibleLines = clearedViewKey === currentViewKey ? [] : allLines.filter((line) => line.categories.some((category) => enabledFilters[category]));
   const fileIndex = files.findIndex((file) => file.fileName === selectedFile);
   const selectedSummary = files[fileIndex];
   const fromTime = mode === "live" ? visibleLines[0]?.timestamp ?? null : selectedSummary?.modifiedAt ?? null;
@@ -178,70 +178,60 @@ export default function LogsPage() {
   return (
     <ProtectedPage status={guard.status} error={guard.error} loading={guard.loading} onRetry={guard.refresh}>
       <section className="logs-panel">
-        <aside className="logs-control-card">
-          <div className="logs-mode-title">
-            <span>Viewer</span>
-            <strong className={mode === "live" ? "live" : "log"}>{mode.toUpperCase()}</strong>
-          </div>
-          <div className="logs-mode-switch" aria-label="Log mode">
-            <button type="button" className={mode === "live" ? "active" : undefined} onClick={() => setMode("live")}>Live</button>
-            <button type="button" className={mode === "log" ? "active" : undefined} onClick={() => setMode("log")}>Log</button>
-          </div>
-          <div className="logs-range">
-            <strong>From:</strong> {formatTime(fromTime)}
-            <strong>To:</strong> {formatTime(toTime)}
-          </div>
-          {mode === "log" && (
-            <label className="logs-file-picker-inline">
-              Log file
-              <select value={selectedFile} onChange={(event) => selectFile(event.target.value)} disabled={busy !== null || files.length === 0}>
-                {files.length === 0 ? (
-                  <option value="">No log files</option>
-                ) : (
-                  files.map((file) => (
-                    <option key={file.fileName} value={file.fileName}>{file.fileName}</option>
-                  ))
+        <section className="logs-console-shell">
+          <div className="logs-console-toolbar">
+            <div className="logs-toolbar-main">
+              <div className="logs-title-row">
+                <strong>{mode === "live" ? "Live logs" : content?.file.fileName ?? "Saved logs"}</strong>
+                <span className={`logs-mode-badge ${mode}`}>{mode.toUpperCase()}</span>
+              </div>
+              <div className="logs-meta-row">
+                <span>{visibleLines.length} visible</span>
+                <span>From {formatTime(fromTime)}</span>
+                <span>To {formatTime(toTime)}</span>
+                {mode === "log" && selectedSummary && (
+                  <span title={selectedSummary.path}>{shortenPath(selectedSummary.path, 58)} - {formatBytes(selectedSummary.sizeBytes)}</span>
                 )}
-              </select>
-            </label>
-          )}
-          <div className="logs-pager">
-            <button type="button" onClick={() => moveLogFile("older")} disabled={mode !== "log" || fileIndex < 0 || fileIndex >= files.length - 1}>{"< View Older"}</button>
-            <button type="button" onClick={() => moveLogFile("newer")} disabled={mode !== "log" || fileIndex <= 0}>{"View Newer >"}</button>
+              </div>
+            </div>
+            <div className="logs-toolbar-controls">
+              <div className="logs-mode-switch" aria-label="Log mode">
+                <button type="button" className={mode === "live" ? "active" : undefined} onClick={() => setMode("live")}>Live</button>
+                <button type="button" className={mode === "log" ? "active" : undefined} onClick={() => setMode("log")}>Files</button>
+              </div>
+              {mode === "log" && (
+                <select className="logs-file-select" value={selectedFile} onChange={(event) => selectFile(event.target.value)} disabled={busy !== null || files.length === 0}>
+                  {files.length === 0 ? (
+                    <option value="">No log files</option>
+                  ) : (
+                    files.map((file) => (
+                      <option key={file.fileName} value={file.fileName}>{file.fileName}</option>
+                    ))
+                  )}
+                </select>
+              )}
+              <button type="button" onClick={() => moveLogFile("older")} disabled={mode !== "log" || fileIndex < 0 || fileIndex >= files.length - 1}>Older</button>
+              <button type="button" onClick={() => moveLogFile("newer")} disabled={mode !== "log" || fileIndex <= 0}>Newer</button>
+              <button type="button" onClick={() => (mode === "log" ? loadFiles(selectedFile) : guard.refresh())} disabled={busy !== null}>
+                {busy ? "Loading..." : "Refresh"}
+              </button>
+              <button type="button" onClick={() => setClearedViewKey(currentViewKey)}>Clear</button>
+              <button type="button" onClick={() => copyVisibleLines(visibleLines)} disabled={visibleLines.length === 0}>Copy</button>
+            </div>
           </div>
-          <div className="logs-pager">
-            <button type="button" onClick={() => setClearedViewKey(currentViewKey)}>Clear Console</button>
-            <button type="button" onClick={() => (mode === "log" ? loadFiles(selectedFile) : guard.refresh())} disabled={busy !== null}>
-              {busy ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-          {mode === "log" && selectedSummary && (
-            <p className="logs-file-meta" title={selectedSummary.path}>
-              {shortenPath(selectedSummary.path, 46)} - {formatBytes(selectedSummary.sizeBytes)}
-            </p>
-          )}
-          <div className="logs-filter-divider" />
-          <h2>Logger Filters</h2>
-          <div className="logger-filters">
+          <div className="logs-filter-bar">
             {filters.map((filter) => (
-              <label key={filter.key} className="logger-filter-row">
-                <span>{filter.label}</span>
+              <label key={filter.key} className={`logs-filter-chip ${enabledFilters[filter.key] ? "active" : ""}`}>
                 <input
                   type="checkbox"
                   checked={enabledFilters[filter.key]}
                   onChange={(event) => setEnabledFilters((current) => ({ ...current, [filter.key]: event.target.checked }))}
                 />
-                <span className="toggle-pill" aria-hidden="true">{enabledFilters[filter.key] ? "ON" : "OFF"}</span>
+                <span>{filter.label}</span>
               </label>
             ))}
           </div>
-          {message && <p className={`validation-message ${messageKind}`}>{message}</p>}
-        </aside>
-        <section className="logs-console-shell">
-          <div className="logs-console-toolbar">
-            <strong>{mode === "live" ? "Live console history" : content?.file.fileName ?? "No log selected"}</strong>
-            <button type="button" onClick={() => copyVisibleLines(visibleLines)} disabled={visibleLines.length === 0}>Copy visible</button>
-          </div>
+          {message && <p className={`logs-message validation-message ${messageKind}`}>{message}</p>}
           <div className="logs-console" role="log" aria-live={mode === "live" ? "polite" : "off"}>
             {busy === "file" ? (
               <p className="muted">Loading log...</p>
@@ -249,7 +239,7 @@ export default function LogsPage() {
               <p className="muted">{mode === "live" ? "No live log lines match the active filters." : "No saved log lines match the active filters."}</p>
             ) : (
               visibleLines.map((line) => (
-                <div key={line.id} className={`log-line ${line.category}`}>
+                <div key={line.id} className={`log-line ${line.categories.join(" ")}`}>
                   {highlightLine(line.text)}
                 </div>
               ))

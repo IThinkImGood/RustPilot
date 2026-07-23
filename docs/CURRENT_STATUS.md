@@ -1,10 +1,10 @@
 # RustPilot Current Status
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Current State
 
-RustPilot has a working first-run setup flow with setup guarding, development routing through the backend, setup wizard tooltips, live field validation, and server-side install directory validation.
+RustPilot has a working first-run setup flow, WebRCON baseline, backup management, wipe planning, CFG editing, log viewing, and setup guarding.
 
 Public URL:
 
@@ -33,10 +33,15 @@ http://127.0.0.1:3001
 - The RustPilot database remains in the app runtime folder.
 - Installation can only start after server-side install directory validation.
 - The Backups top-nav dropdown links to separate Manual and Automatic backup pages for Rust identity data and cfg files.
-- The Wipes page separates the official Rust force wipe from additional custom wipe schedules, follows Facepunch's first-Thursday monthly wipe timer, and combines close custom wipes to avoid duplicate wipes.
+- Manual backups can be created, deleted, and restored after explicit confirmation.
+- RustPilot creates a safety backup before restoring over current identity data.
+- Automatic backups support fixed local daily backup times and retention limits.
+- The Wipes top-nav dropdown links to Official, Custom, and Run & History pages.
+- Official wipes follow Facepunch's first-Thursday monthly Rust force wipe timer and run SteamCMD update before wiping.
+- Custom wipes can be none, weekly, biweekly, monthly, or one-time, and are combined with close official wipes to avoid duplicate wipes.
 - Map wipes can keep the current seed, generate a random seed, or store an explicit next seed before restart.
-- Manual backups can be restored after explicit confirmation; RustPilot creates a safety backup before replacing current identity data.
-- The Logs page in the left navigation lists safe `.log` files and reads the latest log content from disk.
+- The Logs page in the left navigation supports live history, saved log files, source-aware filters, copy, refresh, and clear-view actions.
+- Dangerous UI actions use RustPilot modal dialogs rather than browser-native confirm/prompt dialogs.
 
 ## Install Directory Validation
 
@@ -88,6 +93,7 @@ apps/server/src/installDirectoryValidation.ts
 apps/server/src/backups.ts
 apps/server/src/backupScheduler.ts
 apps/server/src/wipePlanner.ts
+apps/server/src/logFiles.ts
 apps/server/src/websocket.ts
 ```
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.1.0-alpha.6
+
+### Added
+
+- Completed Phase 3 backup, wipe, and log management.
+- Added manual backup delete and restore with safety backups.
+- Added automatic backup scheduling with retention limits.
+- Added official Rust force wipe scheduling plus additional custom wipe schedules.
+- Added map, blueprint, and map + blueprint wipe modes with next-seed handling.
+- Added a log viewer for live history and saved RustPilot log files.
+
+### Changed
+
+- Split Wipes into Official, Custom, and Run & History pages.
+- Reworked the log viewer into a single RustPilot-styled console surface.
+- Replaced remaining browser-native destructive prompts with RustPilot modal dialogs.
+- Updated Phase 3 documentation and roadmap status.
+
 ## v0.1.0-alpha.5
 
 ### Added
