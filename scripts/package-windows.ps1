@@ -34,6 +34,14 @@ function Write-Json($Path, $Value) {
   $Value | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+Write-Host "Preparing RustPilot icons..."
+Push-Location $root
+try {
+  Invoke-Native "npm" @("run", "build:icons")
+} finally {
+  Pop-Location
+}
+
 Write-Host "Building RustPilot production output..."
 Push-Location $root
 try {
@@ -163,6 +171,8 @@ Invoke-Native "node" @("--experimental-sea-config", $seaConfigPath)
 
 $launcherExe = Join-Path $bundleDir "RustPilot.exe"
 Copy-Item -LiteralPath $nodeExe -Destination $launcherExe -Force
+Write-Host "Applying RustPilot.exe icon..."
+Invoke-Native "node" @((Join-Path $root "scripts\set-exe-icon.mjs"), $launcherExe, (Join-Path $root "apps\web\public\brand\logo.ico"))
 Invoke-Native "npx" @("postject", $launcherExe, "NODE_SEA_BLOB", $seaBlobPath, "--sentinel-fuse", "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2", "--overwrite")
 
 @"

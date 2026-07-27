@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "npm run build -w @rustpilot/shared && npm run build -w @rustpilot/rust-adapter && concurrently -k -n server,web \"npm run dev -w @rustpilot/server\" \"npm run dev -w @rustpilot/web\"",
     "build": "npm run build -w @rustpilot/shared && npm run build -w @rustpilot/rust-adapter && npm run build -w @rustpilot/server && npm run build -w @rustpilot/web",
+    "build:icons": "node scripts/build-icons.mjs",
     "start": "npm run start -w @rustpilot/server",
     "package:win": "powershell -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
     "test": "vitest run",
@@ -26,8 +27,11 @@
     "@typescript-eslint/parser": "^8.37.0",
     "concurrently": "^9.2.0",
     "eslint": "^9.31.0",
+    "png-to-ico": "^3.0.2",
     "postject": "^1.0.0-alpha.6",
     "prettier": "^3.6.2",
+    "rcedit": "^5.0.2",
+    "sharp": "^0.35.3",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"

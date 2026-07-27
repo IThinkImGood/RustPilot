@@ -71,8 +71,13 @@ a {
   height: 100%;
   padding: 0 20px;
   color: var(--rust-accent-strong);
-  font-size: 25px;
-  font-weight: 700;
+}
+
+.app-header-brand img {
+  display: block;
+  width: 154px;
+  max-width: 100%;
+  height: auto;
 }
 
 .top-nav {
@@ -1948,9 +1953,13 @@ textarea {
 .setup-brand {
   width: min(100%, 1080px);
   margin: 0 auto 22px;
-  color: var(--rust-accent-strong);
-  font-size: 25px;
-  font-weight: 700;
+}
+
+.setup-brand img {
+  display: block;
+  width: 170px;
+  max-width: 100%;
+  height: auto;
 }
 
 .dev-redirect {

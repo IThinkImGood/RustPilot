@@ -58,7 +58,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <>
         <DirectDevPortRedirect />
         <main className="setup-shell">
-          <div className="setup-brand">RustPilot</div>
+          <div className="setup-brand">
+            <img src="/brand/logo.svg" alt="RustPilot" />
+          </div>
           {redirectTarget && redirectTarget !== pathname ? <section className="panel">Opening setup...</section> : children}
         </main>
       </>
@@ -70,7 +72,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <DirectDevPortRedirect />
       <div className="shell">
         <header className="app-header">
-          <Link className="app-header-brand" href="/dashboard">RustPilot</Link>
+          <Link className="app-header-brand" href="/dashboard" aria-label="RustPilot dashboard">
+            <img src="/brand/logo.svg" alt="RustPilot" />
+          </Link>
           <div className="top-nav">
             <Link href="/settings" className={activePath === "/settings" ? "active" : undefined}>
               <FontAwesomeIcon className="nav-link-icon" icon={faGear} fixedWidth />
