@@ -4,9 +4,11 @@ RustPilot is an open-source management app for a local Rust Dedicated Server on 
 
 ## Project Status
 
-`v0.1.0-alpha.5` is an early preview that is usable for local testing and early adopters. Core functionality is present: first-run setup, install directory selection, SteamCMD download, Rust Dedicated Server installation through Steam app `258550`, SQLite settings, WebSockets, live console output, process management, WebRCON admin tools, CFG editing, log viewing, scheduled restarts, manual/automatic backups, backup restore, official Rust force wipe planning, additional custom wipe schedules, wipe seed handling, and a portable Windows ZIP with `RustPilot.exe`.
+`v0.1.0-alpha.7` is an early preview that is usable for local testing and early adopters. Core functionality is present: first-run setup, install directory selection, SteamCMD download, Rust Dedicated Server installation through Steam app `258550`, SQLite settings, WebSockets, live console output, process management, WebRCON admin tools, CFG editing, log viewing, scheduled restarts, manual/automatic backups, backup restore, official Rust force wipe planning, additional custom wipe schedules, wipe seed handling, RustPilot branding, and a portable Windows ZIP with `RustPilot.exe`.
 
 Do not use this version for unattended production hosting yet. Expect rough edges and test your install path before using existing server files.
+
+RustPilot does not currently include public-internet authentication or roles. Keep the panel bound to localhost and do not port forward the RustPilot web panel.
 
 ## Prerequisites
 
@@ -18,7 +20,7 @@ Node.js and npm are only required when developing RustPilot from source.
 ## Download And Run
 
 1. Open the latest GitHub release.
-2. Download `RustPilot-v0.1.0-alpha.5-win-x64.zip`.
+2. Download `RustPilot-v0.1.0-alpha.7-win-x64.zip`.
 3. Extract the ZIP to a normal folder, for example `C:\RustPilot`.
 4. Start `RustPilot.exe`.
 5. Keep the console window open while using RustPilot.
@@ -100,12 +102,14 @@ Absolute user paths are not hardcoded. SteamCMD is downloaded only from Valve's 
 - Local web panel only.
 - One server profile.
 - Console commands use WebRCON when the Rust server is running, with stdin fallback for local process shutdown.
-- No plugin management or remote account system yet.
+- No plugin management, remote account system, Steam login, or role-based panel access yet.
 - Portable ZIP release, not a single standalone `.exe`. Keep `RustPilot.exe`, `runtime/`, and `app/` together.
 
 ## Security
 
-RustPilot binds to `127.0.0.1` by default, accepts only local origins, and redacts RCON passwords in logs and API status. Do not expose the panel to the network.
+RustPilot binds to `127.0.0.1` by default, accepts only local origins, and redacts RCON passwords in logs and API status.
+
+Do not expose the RustPilot web panel directly to the internet. Do not port forward the RustPilot panel port. Until authentication, roles, sessions, CSRF protection, rate limiting, and remote-access hardening are implemented, use RustPilot locally on the server machine or through a trusted remote desktop or private VPN.
 
 ## Contributing
 
