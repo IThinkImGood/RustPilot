@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.0-alpha.7
+
+### Added
+
+- Added RustPilot logo assets for the web panel, setup screen, favicon, and Windows portable launcher icon.
+
+### Changed
+
+- Updated the Windows packaging flow to generate the project icon and apply it to `RustPilot.exe`.
+
 ## v0.1.0-alpha.6
 
 ### Added
