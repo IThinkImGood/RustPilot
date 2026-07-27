@@ -22,6 +22,8 @@ import { WebRconClient } from "./webRconClient.js";
 import { buildRestartAnnouncementCommand, nextDailyRunAt, restartAnnouncementMinutes, RestartScheduler } from "./restartScheduler.js";
 import { BackupScheduler, nextBackupRunAt } from "./backupScheduler.js";
 import { WipePlanner, computeNextMonthlyWipeTagRunAt, computeNextOfficialForceWipe, computeNextWeeklyRunAt, wipeRustFiles } from "./wipePlanner.js";
+import type { AuthManager, AuthContext } from "./auth.js";
+import type { AuthPermission, AuthRole, AuthUser } from "@rustpilot/shared";
 
 class FakeChild extends EventEmitter {
   stdout = new PassThrough();
@@ -511,7 +513,7 @@ describe("setup-gated API actions", () => {
     } as unknown as WipePlanner;
   }
 
-  function createTestApi(f: ReturnType<typeof fixture>) {
+  function createTestApi(f: ReturnType<typeof fixture>, auth?: AuthManager) {
     const app = express();
     const processManager = new ServerProcessManager(f.adapter, f.storage, f.logger, f.runner);
     const installer = {
@@ -576,10 +578,78 @@ describe("setup-gated API actions", () => {
         restartScheduler,
         backupScheduler,
         wipePlanner: fakeWipePlanner(),
-        panelUrl: "http://127.0.0.1:40815"
+        panelUrl: "http://127.0.0.1:40815",
+        auth
       })
     );
     return app;
+  }
+
+  function permissionsForRole(role: AuthRole): AuthPermission[] {
+    if (role === "owner") return ["manage.users", "settings.write", "server.control", "console.write", "announcement", "players.kick", "players.ban", "cfg.write", "backups.write", "wipes.write", "danger.write"];
+    if (role === "admin") return ["settings.write", "server.control", "console.write", "announcement", "players.kick", "players.ban", "cfg.write", "backups.write", "wipes.write"];
+    return [];
+  }
+
+  function authUser(role: AuthUser["role"]): AuthUser {
+    return {
+      steamId64: role === "owner" ? "76561198000000001" : "76561198000000002",
+      displayName: role,
+      role,
+      permissions: permissionsForRole(role),
+      enabled: true,
+      createdAt: new Date(0).toISOString(),
+      lastLoginAt: null
+    };
+  }
+
+  function fakeAuth(user: AuthUser | null): AuthManager {
+    const context: AuthContext = { user, tokenHash: user ? "session" : null };
+    return {
+      status: () => ({ required: true, hasOwner: true, user, csrfToken: user ? "test-csrf" : null }),
+      getContext: () => context,
+      permissionsForRole,
+      csrfToken: () => "test-csrf",
+      createSteamLoginUrl: () => "https://steamcommunity.com/openid/login",
+      handleSteamCallback: async () => "/dashboard",
+      logout: () => undefined,
+      requireAuth: (_req, res, next) => {
+        if (!user) {
+          res.status(401).json({ success: false, error: { code: "AUTH_REQUIRED", message: "Login required." } });
+          return;
+        }
+        next();
+      },
+      requireRole: (roles) => (_req, res, next) => {
+        if (!user) {
+          res.status(401).json({ success: false, error: { code: "AUTH_REQUIRED", message: "Login required." } });
+          return;
+        }
+        if (!roles.includes(user.role)) {
+          res.status(403).json({ success: false, error: { code: "AUTH_FORBIDDEN", message: "Insufficient permissions." } });
+          return;
+        }
+        next();
+      },
+      requirePermission: (permission) => (_req, res, next) => {
+        if (!user) {
+          res.status(401).json({ success: false, error: { code: "AUTH_REQUIRED", message: "Login required." } });
+          return;
+        }
+        if (!user.permissions.includes(permission)) {
+          res.status(403).json({ success: false, error: { code: "AUTH_FORBIDDEN", message: "Insufficient permissions." } });
+          return;
+        }
+        next();
+      },
+      requireCsrf: (req, res, next) => {
+        if (["GET", "HEAD", "OPTIONS"].includes(req.method) || req.headers["x-rustpilot-csrf"] === "test-csrf") {
+          next();
+          return;
+        }
+        res.status(403).json({ success: false, error: { code: "CSRF_FAILED", message: "Security token is missing or invalid." } });
+      }
+    };
   }
 
   async function listen(app: express.Express) {
@@ -615,6 +685,95 @@ describe("setup-gated API actions", () => {
         message: "Complete the RustPilot installation first."
       }
     });
+  });
+
+  it("returns limited status before Steam login", async () => {
+    const f = fixture();
+    const app = createTestApi(f, fakeAuth(null));
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/status`);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({
+        success: true,
+        data: {
+          auth: { required: true, user: null },
+          websocket: null
+        }
+      });
+      expect(body.data.settings).toBeUndefined();
+      expect(body.data.paths).toBeUndefined();
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("lets owners create Steam-auth users", async () => {
+    const f = fixture();
+    const app = createTestApi(f, fakeAuth(authUser("owner")));
+    const { server, baseUrl } = await listen(app);
+    try {
+      const createResponse = await fetch(`${baseUrl}/auth/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-RustPilot-CSRF": "test-csrf" },
+        body: JSON.stringify({ steamId64: "76561198000000003", displayName: "Admin", role: "admin", enabled: true })
+      });
+      expect(createResponse.status).toBe(201);
+      const listResponse = await fetch(`${baseUrl}/auth/users`);
+      expect(await listResponse.json()).toMatchObject({
+        success: true,
+        data: [{ steamId64: "76561198000000003", displayName: "Admin", role: "admin", enabled: true }]
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("keeps viewer accounts read-only for server actions", async () => {
+    const f = fixture();
+    const app = createTestApi(f, fakeAuth(authUser("viewer")));
+    const { server, baseUrl } = await listen(app);
+    try {
+      const statusResponse = await fetch(`${baseUrl}/status`);
+      expect(statusResponse.status).toBe(200);
+      const startResponse = await fetch(`${baseUrl}/server/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-RustPilot-CSRF": "test-csrf" },
+        body: "{}"
+      });
+      expect(startResponse.status).toBe(403);
+      expect(await startResponse.json()).toMatchObject({
+        success: false,
+        error: { code: "AUTH_FORBIDDEN" }
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
+  });
+
+  it("rejects authenticated mutations without a CSRF token", async () => {
+    const f = fixture();
+    const app = createTestApi(f, fakeAuth(authUser("owner")));
+    const { server, baseUrl } = await listen(app);
+    try {
+      const response = await fetch(`${baseUrl}/server/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        success: false,
+        error: { code: "CSRF_FAILED" }
+      });
+    } finally {
+      server.close();
+      f.cleanup();
+    }
   });
 
   it("rejects manual backups when setup is incomplete", async () => {

@@ -1,6 +1,6 @@
 "use client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBoxArchive, faClockRotateLeft, faFileCode, faFileLines, faGear, faGaugeHigh, faHand, faRotate, faSkullCrossbones, faTerminal, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBoxArchive, faClockRotateLeft, faFileCode, faFileLines, faGear, faGaugeHigh, faHand, faRightFromBracket, faRotate, faSkullCrossbones, faTerminal, faUsers, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -10,11 +10,17 @@ import { PlayerAdminPanel } from "./PlayerAdminPanel";
 import { ServerControlsPanel } from "./ServerControlsPanel";
 import { useRustPilot } from "./useRustPilot";
 
+function csrfToken(): string | null {
+  const token = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("rustpilot_csrf="));
+  return token ? decodeURIComponent(token.slice("rustpilot_csrf=".length)) : null;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { status, loading, error, refresh } = useRustPilot();
   const setupCompleted = status?.setup?.setupCompleted === true;
+  const auth = status?.auth;
   const mode = getAppLayoutMode({ loading, hasError: Boolean(error), setupCompleted });
   const redirectTarget = shouldRedirectForSetup(pathname, setupCompleted);
   const activePath = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
@@ -53,6 +59,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (auth?.required && !auth.user) {
+    if (activePath === "/auth/login") {
+      return (
+        <>
+          <DirectDevPortRedirect />
+          <main className="setup-shell">
+            <div className="setup-brand">
+              <img src="/brand/logo.svg" alt="RustPilot" />
+            </div>
+            {children}
+          </main>
+        </>
+      );
+    }
+    return (
+      <>
+        <DirectDevPortRedirect />
+        <main className="setup-shell">
+          <div className="setup-brand">
+            <img src="/brand/logo.svg" alt="RustPilot" />
+          </div>
+          <section className="panel setup-panel auth-panel">
+            <span className="setup-eyebrow">{auth.hasOwner ? "Login required" : "Claim installation"}</span>
+            <h1>{auth.hasOwner ? "Login with Steam" : "Claim RustPilot with Steam"}</h1>
+            <p className="muted">
+              {auth.hasOwner
+                ? "Use an allowed Steam account to access this RustPilot panel."
+                : "The first Steam account to login becomes the RustPilot owner for this installation."}
+            </p>
+            <div className="actions">
+              <a className="button primary" href={`/api/auth/steam/login?returnTo=${encodeURIComponent(pathname || "/dashboard")}`}>
+                Login with Steam
+              </a>
+            </div>
+            <p className="muted">RustPilot is local-first. Remote access is optional and should use your own VPN or HTTPS reverse proxy.</p>
+          </section>
+        </main>
+      </>
+    );
+  }
+
   if (mode === "setup-only") {
     return (
       <>
@@ -79,6 +126,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/settings" className={activePath === "/settings" ? "active" : undefined}>
               <FontAwesomeIcon className="nav-link-icon" icon={faGear} fixedWidth />
               <span>Settings</span>
+            </Link>
+            <Link href="/users" className={activePath === "/users" ? "active" : undefined}>
+              <FontAwesomeIcon className="nav-link-icon" icon={faUsers} fixedWidth />
+              <span>Users</span>
             </Link>
             <Link href="/cfg-editor" className={activePath === "/cfg-editor" ? "active" : undefined}>
               <FontAwesomeIcon className="nav-link-icon" icon={faFileCode} fixedWidth />
@@ -120,6 +171,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
             </div>
+          </div>
+          <div className="top-nav-user">
+            <span>{auth?.user?.displayName}</span>
+            <button
+              type="button"
+              title="Logout"
+              onClick={async () => {
+                const token = csrfToken();
+                await fetch("/api/auth/logout", {
+                  method: "POST",
+                  headers: token ? { "X-RustPilot-CSRF": token } : undefined
+                });
+                location.href = "/";
+              }}
+            >
+              <FontAwesomeIcon icon={faRightFromBracket} />
+            </button>
           </div>
         </header>
         <nav className="nav">

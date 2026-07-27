@@ -33,4 +33,8 @@ describe("route setup guard decisions", () => {
   it("blocks logs when setup is incomplete", () => {
     expect(getSetupRedirectTarget("/logs", false)).toBe("/setup");
   });
+
+  it("blocks users when setup is incomplete", () => {
+    expect(getSetupRedirectTarget("/users", false)).toBe("/setup");
+  });
 });

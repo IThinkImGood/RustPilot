@@ -199,6 +199,50 @@ export interface WipePlannerStatus {
   lastError: string | null;
 }
 
+export type AuthRole = "owner" | "admin" | "viewer";
+export type AuthPermission =
+  | "manage.users"
+  | "settings.write"
+  | "server.control"
+  | "console.write"
+  | "announcement"
+  | "players.kick"
+  | "players.ban"
+  | "cfg.write"
+  | "backups.write"
+  | "wipes.write"
+  | "danger.write";
+
+export interface AuthUser {
+  steamId64: string;
+  displayName: string;
+  role: AuthRole;
+  permissions: AuthPermission[];
+  enabled: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface AuthStatus {
+  required: boolean;
+  hasOwner: boolean;
+  user: AuthUser | null;
+  csrfToken: string | null;
+}
+
+export interface AuthActionLogEntry {
+  id: number;
+  timestamp: string;
+  steamId64: string | null;
+  displayName: string | null;
+  role: AuthRole | null;
+  method: string;
+  path: string;
+  action: string;
+  statusCode: number | null;
+  success: boolean;
+}
+
 export interface SetupStatus {
   completed: boolean;
   setupCompleted?: boolean;

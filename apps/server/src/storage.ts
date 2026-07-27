@@ -8,6 +8,10 @@ import {
   restartScheduleSchema,
   wipePlannerConfigSchema,
   type BackupScheduleConfig,
+  type AuthActionLogEntry,
+  type AuthPermission,
+  type AuthRole,
+  type AuthUser,
   serverSettingsSchema,
   type InstallationState,
   type RestartScheduleConfig,
@@ -15,6 +19,16 @@ import {
   type SetupStatus,
   type WipePlannerConfig
 } from "@rustpilot/shared";
+
+function permissionsForRole(role: AuthRole): AuthPermission[] {
+  if (role === "owner") {
+    return ["manage.users", "settings.write", "server.control", "console.write", "announcement", "players.kick", "players.ban", "cfg.write", "backups.write", "wipes.write", "danger.write"];
+  }
+  if (role === "admin") {
+    return ["settings.write", "server.control", "console.write", "announcement", "players.kick", "players.ban", "cfg.write", "backups.write", "wipes.write"];
+  }
+  return [];
+}
 
 export class Storage {
   private db!: DatabaseSync;
@@ -47,9 +61,214 @@ export class Storage {
         last_crash_at TEXT,
         last_known_version TEXT
       );
+      CREATE TABLE IF NOT EXISTS auth_users (
+        steam_id64 TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        last_login_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        token_hash TEXT PRIMARY KEY,
+        steam_id64 TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        FOREIGN KEY (steam_id64) REFERENCES auth_users(steam_id64) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS auth_action_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        steam_id64 TEXT,
+        display_name TEXT,
+        role TEXT,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        action TEXT NOT NULL,
+        status_code INTEGER,
+        success INTEGER NOT NULL
+      );
       INSERT OR IGNORE INTO runtime (id, installation_state, setup_completed)
       VALUES (1, 'not_configured', 0);
     `);
+  }
+
+  hasAuthOwner(): boolean {
+    const row = this.db.prepare("SELECT 1 FROM auth_users WHERE role = 'owner' AND enabled = 1 LIMIT 1").get();
+    return Boolean(row);
+  }
+
+  listAuthUsers(): AuthUser[] {
+    const rows = this.db
+      .prepare("SELECT steam_id64, display_name, role, enabled, created_at, last_login_at FROM auth_users ORDER BY role = 'owner' DESC, created_at ASC")
+      .all() as Array<{
+        steam_id64: string;
+        display_name: string;
+        role: AuthRole;
+        enabled: number;
+        created_at: string;
+        last_login_at: string | null;
+      }>;
+    return rows.map((row) => ({
+      steamId64: row.steam_id64,
+      displayName: row.display_name,
+      role: row.role,
+      permissions: permissionsForRole(row.role),
+      enabled: Boolean(row.enabled),
+      createdAt: row.created_at,
+      lastLoginAt: row.last_login_at
+    }));
+  }
+
+  getAuthUser(steamId64: string): AuthUser | null {
+    const row = this.db
+      .prepare("SELECT steam_id64, display_name, role, enabled, created_at, last_login_at FROM auth_users WHERE steam_id64 = ?")
+      .get(steamId64) as
+      | {
+          steam_id64: string;
+          display_name: string;
+          role: AuthRole;
+          enabled: number;
+          created_at: string;
+          last_login_at: string | null;
+        }
+      | undefined;
+    if (!row) return null;
+    return {
+      steamId64: row.steam_id64,
+      displayName: row.display_name,
+      role: row.role,
+      permissions: permissionsForRole(row.role),
+      enabled: Boolean(row.enabled),
+      createdAt: row.created_at,
+      lastLoginAt: row.last_login_at
+    };
+  }
+
+  saveAuthUser(user: { steamId64: string; displayName: string; role: AuthRole; enabled: boolean }): AuthUser {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        "INSERT INTO auth_users (steam_id64, display_name, role, enabled, created_at, last_login_at) VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT(steam_id64) DO UPDATE SET display_name = excluded.display_name, role = excluded.role, enabled = excluded.enabled"
+      )
+      .run(user.steamId64, user.displayName, user.role, user.enabled ? 1 : 0, now);
+    const saved = this.getAuthUser(user.steamId64);
+    if (!saved) throw new Error("Auth user was not saved.");
+    return saved;
+  }
+
+  deleteAuthUser(steamId64: string): boolean {
+    const existing = this.getAuthUser(steamId64);
+    if (!existing) return false;
+    if (existing.role === "owner" && this.listAuthUsers().filter((user) => user.role === "owner" && user.enabled).length <= 1) {
+      throw new Error("At least one enabled owner is required.");
+    }
+    this.db.prepare("DELETE FROM auth_sessions WHERE steam_id64 = ?").run(steamId64);
+    this.db.prepare("DELETE FROM auth_users WHERE steam_id64 = ?").run(steamId64);
+    return true;
+  }
+
+  markAuthLogin(steamId64: string): void {
+    this.db.prepare("UPDATE auth_users SET last_login_at = ? WHERE steam_id64 = ?").run(new Date().toISOString(), steamId64);
+  }
+
+  saveAuthSession(tokenHash: string, steamId64: string, expiresAt: string): void {
+    this.db
+      .prepare("INSERT OR REPLACE INTO auth_sessions (token_hash, steam_id64, created_at, expires_at) VALUES (?, ?, ?, ?)")
+      .run(tokenHash, steamId64, new Date().toISOString(), expiresAt);
+  }
+
+  getAuthSession(tokenHash: string): { tokenHash: string; user: AuthUser; expiresAt: string } | null {
+    const row = this.db
+      .prepare(
+        "SELECT s.token_hash, s.expires_at, u.steam_id64, u.display_name, u.role, u.enabled, u.created_at, u.last_login_at FROM auth_sessions s JOIN auth_users u ON u.steam_id64 = s.steam_id64 WHERE s.token_hash = ?"
+      )
+      .get(tokenHash) as
+      | {
+          token_hash: string;
+          expires_at: string;
+          steam_id64: string;
+          display_name: string;
+          role: AuthRole;
+          enabled: number;
+          created_at: string;
+          last_login_at: string | null;
+        }
+      | undefined;
+    if (!row || new Date(row.expires_at).getTime() <= Date.now() || !row.enabled) {
+      if (row) this.deleteAuthSession(tokenHash);
+      return null;
+    }
+    return {
+      tokenHash: row.token_hash,
+      expiresAt: row.expires_at,
+      user: {
+        steamId64: row.steam_id64,
+        displayName: row.display_name,
+        role: row.role,
+        permissions: permissionsForRole(row.role),
+        enabled: Boolean(row.enabled),
+        createdAt: row.created_at,
+        lastLoginAt: row.last_login_at
+      }
+    };
+  }
+
+  deleteAuthSession(tokenHash: string): void {
+    this.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").run(tokenHash);
+  }
+
+  pruneExpiredAuthSessions(): void {
+    this.db.prepare("DELETE FROM auth_sessions WHERE expires_at <= ?").run(new Date().toISOString());
+  }
+
+  recordAuthActionLog(entry: Omit<AuthActionLogEntry, "id" | "timestamp">): void {
+    this.db
+      .prepare(
+        "INSERT INTO auth_action_logs (timestamp, steam_id64, display_name, role, method, path, action, status_code, success) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      )
+      .run(
+        new Date().toISOString(),
+        entry.steamId64,
+        entry.displayName,
+        entry.role,
+        entry.method,
+        entry.path,
+        entry.action,
+        entry.statusCode,
+        entry.success ? 1 : 0
+      );
+  }
+
+  listAuthActionLogs(limit = 200): AuthActionLogEntry[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, timestamp, steam_id64, display_name, role, method, path, action, status_code, success FROM auth_action_logs ORDER BY id DESC LIMIT ?"
+      )
+      .all(limit) as Array<{
+        id: number;
+        timestamp: string;
+        steam_id64: string | null;
+        display_name: string | null;
+        role: AuthRole | null;
+        method: string;
+        path: string;
+        action: string;
+        status_code: number | null;
+        success: number;
+      }>;
+    return rows.map((row) => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      steamId64: row.steam_id64,
+      displayName: row.display_name,
+      role: row.role,
+      method: row.method,
+      path: row.path,
+      action: row.action,
+      statusCode: row.status_code,
+      success: Boolean(row.success)
+    }));
   }
 
   getSettings(): ServerSettings {

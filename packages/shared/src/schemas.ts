@@ -82,6 +82,20 @@ export const commandRequestSchema = z.object({
   command: z.string().min(1).max(500)
 });
 
+export const steamId64Schema = z.string().regex(/^\d{17}$/, "Use a valid SteamID64.");
+export const authRoleSchema = z.enum(["owner", "admin", "viewer"]);
+export const authUserCreateSchema = z.object({
+  steamId64: steamId64Schema,
+  displayName: z.string().min(1).max(80),
+  role: authRoleSchema.default("admin"),
+  enabled: z.boolean().default(true)
+});
+export const authUserUpdateSchema = z.object({
+  displayName: z.string().min(1).max(80).optional(),
+  role: authRoleSchema.optional(),
+  enabled: z.boolean().optional()
+});
+
 export const restartScheduleSchema = z.object({
   enabled: z.boolean(),
   times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm time.")).max(12),

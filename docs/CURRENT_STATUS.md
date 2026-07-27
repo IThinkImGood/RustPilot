@@ -1,10 +1,10 @@
 # RustPilot Current Status
 
-Last updated: 2026-07-23
+Last updated: 2026-07-27
 
 ## Current State
 
-RustPilot has a working first-run setup flow, WebRCON baseline, backup management, wipe planning, CFG editing, log viewing, and setup guarding.
+RustPilot has a working first-run setup flow, local Steam authentication, owner/admin/viewer users, WebRCON baseline, backup management, wipe planning, CFG editing, log viewing, and setup guarding.
 
 Public URL:
 
@@ -22,6 +22,13 @@ http://127.0.0.1:3001
 
 - Incomplete setup redirects to `/setup`.
 - Dashboard, console, and settings are protected until setup is complete.
+- First local Steam login claims the RustPilot installation as owner.
+- After owner claim, API and WebSocket access require an authenticated RustPilot session.
+- Owners can manage users from `/users`.
+- Owner/admin/viewer roles expose server-side permissions for user management, settings, server control, console writes, announcements, player moderation, CFG editing, backups, wipes, and danger-zone actions.
+- Viewer users are read-only for mutating API actions.
+- Mutating API actions require CSRF protection and are rate-limited.
+- Authenticated mutating API actions are recorded in a SQLite action log and shown on `/users`.
 - Backend blocks start, stop, restart, command, update, and normal settings changes before setup is complete.
 - Development backend proxies frontend routes to Next on port `3001`.
 - `/api/*` and `/ws` stay on the backend.
@@ -90,6 +97,7 @@ apps/server/src/api.ts
 apps/server/src/index.ts
 apps/server/src/setupStatus.ts
 apps/server/src/installDirectoryValidation.ts
+apps/server/src/auth.ts
 apps/server/src/backups.ts
 apps/server/src/backupScheduler.ts
 apps/server/src/wipePlanner.ts

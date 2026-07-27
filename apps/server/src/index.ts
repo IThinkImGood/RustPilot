@@ -20,6 +20,7 @@ import { WipePlanner } from "./wipePlanner.js";
 import { MetricsCollector } from "./metricsCollector.js";
 import { createApiRouter } from "./api.js";
 import { attachWebSocketServer } from "./websocket.js";
+import { createAuthManager } from "./auth.js";
 import { openBrowser } from "./browser.js";
 import { SingleInstanceLock } from "./singleInstance.js";
 import { computeSetupStatus } from "./setupStatus.js";
@@ -55,11 +56,12 @@ const restartScheduler = new RestartScheduler(storage, processManager, logger);
 const backupScheduler = new BackupScheduler(storage, adapter, logger);
 const wipePlanner = new WipePlanner(storage, adapter, installer, processManager, logger);
 const metrics = new MetricsCollector(processManager);
+const auth = createAuthManager(storage, panelUrl);
 metrics.start();
 
 const app = express();
 app.disable("x-powered-by");
-app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, backupScheduler, wipePlanner, metrics, panelUrl }));
+app.use("/api", createApiRouter({ storage, adapter, logger, installer, processManager, webRcon, restartScheduler, backupScheduler, wipePlanner, metrics, panelUrl, auth }));
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const webOutCandidates = [
@@ -86,7 +88,7 @@ if (fs.existsSync(webOut) && !config.isDevelopment) {
 }
 
 const server = http.createServer(app);
-attachWebSocketServer(server, logger, processManager, installer, storage, adapter, webRcon, restartScheduler, metrics);
+attachWebSocketServer(server, logger, processManager, installer, storage, adapter, webRcon, restartScheduler, metrics, auth);
 
 async function isExistingRustPilotPanelAvailable(): Promise<boolean> {
   const controller = new AbortController();

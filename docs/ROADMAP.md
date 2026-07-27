@@ -31,7 +31,27 @@
 - Source-aware log filters for RustPilot, SteamCMD, Rust server, commands, warnings/errors, player activity, and chat: implemented
 - RustPilot modal confirmations for destructive backup and wipe actions: implemented
 
-## Phase 4
+## Phase 4 - Access control and remote-readiness: in progress
+
+- Steam login first-owner claim: implemented
+- Owner, admin, and viewer users: implemented
+- Server-side role checks for mutating API actions: implemented
+- Permission checks for server control, console, player moderation, cfg, backups, wipes, settings, users, and danger-zone actions: implemented
+- Authenticated WebSocket access: implemented
+- CSRF protection for mutating API actions: implemented
+- Rate limiting for login and mutating API actions: implemented
+- Action logging for authenticated mutating actions: implemented
+- Remote-access/reverse-proxy guidance: planned
+- Session hardening review: planned
+
+## Phase 5
+
+- Windows production installer
+- Automatic RustPilot updates
+- Linux agent
+- Multiple server profiles
+
+## Later
 
 - Carbon
 - Oxide/uMod
@@ -39,12 +59,3 @@
 - Plugin configuration
 - Plugin updates
 - Plugin failure detection
-
-## Phase 5
-
-- Windows production installer
-- Automatic RustPilot updates
-- Linux agent
-- Remote management with authentication
-- Roles and permissions
-- Multiple server profiles

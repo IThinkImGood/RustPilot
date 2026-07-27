@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
-import { backupScheduleSchema, commandRequestSchema, restartScheduleSchema, settingsUpdateSchema, wipePlannerConfigSchema } from "@rustpilot/shared";
+import { authUserCreateSchema, authUserUpdateSchema, backupScheduleSchema, commandRequestSchema, restartScheduleSchema, settingsUpdateSchema, wipePlannerConfigSchema } from "@rustpilot/shared";
+import type { AuthPermission } from "@rustpilot/shared";
 import type { RustAdapter } from "@rustpilot/rust-adapter";
 import { openBrowser } from "./browser.js";
 import type { EventLogger } from "./logger.js";
@@ -18,6 +19,8 @@ import { validateInstallDirectory, type InstallDirectoryChoice } from "./install
 import { CFG_FILES, ensureDefaultCfgFiles, getCfgDirectory, getCfgPath } from "./cfgFiles.js";
 import { createManualBackup, deleteManualBackup, listManualBackups, restoreManualBackup } from "./backups.js";
 import { listLogFiles, readLogFile } from "./logFiles.js";
+import type { AuthManager } from "./auth.js";
+import { createRateLimiter } from "./security.js";
 
 function ok<T>(data: T) {
   return { success: true as const, data };
@@ -82,6 +85,28 @@ function validateCfgContent(value: unknown): string | null {
   return value.replace(/\r\n/g, "\n");
 }
 
+function permissionForRequest(req: express.Request): AuthPermission | null {
+  const path = req.path;
+  if (path.startsWith("/auth/users") || path.startsWith("/auth/action-logs")) return "manage.users";
+  if (path === "/settings" || path === "/install-directory/validate" || path === "/install" || path === "/update") return "settings.write";
+  if (path.startsWith("/server/start") || path.startsWith("/server/stop") || path.startsWith("/server/restart")) return "server.control";
+  if (path === "/server/command") return "console.write";
+  if (path.startsWith("/cfg-files")) return "cfg.write";
+  if (path.startsWith("/backups")) return "backups.write";
+  if (path.startsWith("/wipes")) return "wipes.write";
+  if (path.startsWith("/rcon/say")) return "announcement";
+  if (path.startsWith("/rcon/kick")) return "players.kick";
+  if (path.startsWith("/rcon/ban") || path.startsWith("/rcon/unban")) return "players.ban";
+  if (path.startsWith("/scheduler/restart")) return "server.control";
+  if (path.startsWith("/admin/")) return "danger.write";
+  if (path.startsWith("/system/open-panel")) return "settings.write";
+  return null;
+}
+
+function actionName(req: express.Request): string {
+  return req.path.replace(/^\/+/, "").replace(/[/:]+/g, ".") || "api";
+}
+
 export function createApiRouter(deps: {
   storage: Storage;
   adapter: RustAdapter;
@@ -94,8 +119,11 @@ export function createApiRouter(deps: {
   wipePlanner: WipePlanner;
   metrics?: MetricsCollector;
   panelUrl: string;
+  auth?: AuthManager;
 }): express.Router {
   const router = express.Router();
+  const authRateLimiter = createRateLimiter({ keyPrefix: "auth", windowMs: 60_000, max: 30 });
+  const mutationRateLimiter = createRateLimiter({ keyPrefix: "mutation", windowMs: 60_000, max: 120 });
   router.use(express.json({ limit: "100kb" }));
   router.use((req, res, next) => {
     const remote = req.socket.remoteAddress;
@@ -112,12 +140,45 @@ export function createApiRouter(deps: {
   });
 
   router.get("/health", (_req, res) => res.json(ok({ name: "RustPilot", ok: true })));
-  router.get("/status", (_req, res) => {
+  if (deps.auth) {
+    router.get("/auth/status", (req, res) => res.json(ok(deps.auth!.status(req, res))));
+    router.get("/auth/steam/login", authRateLimiter, (req, res) => {
+      const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : "/dashboard";
+      res.redirect(deps.auth!.createSteamLoginUrl(returnTo));
+    });
+    router.get("/auth/steam/callback", authRateLimiter, async (req, res) => {
+      try {
+        const returnTo = await deps.auth!.handleSteamCallback(req, res);
+        res.redirect(returnTo);
+      } catch (error) {
+        const message = encodeURIComponent(error instanceof Error ? error.message : String(error));
+        res.redirect(`/auth/login?error=${message}`);
+      }
+    });
+    router.post("/auth/logout", deps.auth.requireCsrf, (req, res) => {
+      deps.auth!.logout(req, res);
+      res.json(ok({ loggedOut: true }));
+    });
+  }
+  router.get("/status", (req, res) => {
     const settings = deps.storage.getSettings();
     const paths = deps.adapter.getPaths(settings);
     const setup = computeSetupStatus(deps.storage, deps.adapter);
+    const auth = deps.auth?.status(req, res) ?? { required: false, hasOwner: false, user: null, csrfToken: null };
+    if (deps.auth && !auth.user) {
+      res.json(
+        ok({
+          auth,
+          setup,
+          websocket: null,
+          installRunning: deps.installer.isRunning()
+        })
+      );
+      return;
+    }
     res.json(
       ok({
+        auth,
         process: deps.processManager.getStatus(),
         setup,
         paths: {
@@ -138,6 +199,104 @@ export function createApiRouter(deps: {
       })
     );
   });
+
+  if (deps.auth) {
+    router.use(deps.auth.requireAuth);
+    router.use((req, res, next) => {
+      if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        next();
+        return;
+      }
+      deps.auth!.requireCsrf(req, res, next);
+    });
+    router.use((req, res, next) => {
+      if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        next();
+        return;
+      }
+      const user = deps.auth!.getContext(req).user;
+      res.on("finish", () => {
+        deps.storage.recordAuthActionLog({
+          steamId64: user?.steamId64 ?? null,
+          displayName: user?.displayName ?? null,
+          role: user?.role ?? null,
+          method: req.method,
+          path: req.path,
+          action: actionName(req),
+          statusCode: res.statusCode,
+          success: res.statusCode < 400
+        });
+      });
+      next();
+    });
+    router.use((req, res, next) => {
+      if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        next();
+        return;
+      }
+      mutationRateLimiter(req, res, next);
+    });
+    router.get("/auth/users", deps.auth.requireRole(["owner", "admin"]), (_req, res) => {
+      res.json(ok(deps.storage.listAuthUsers()));
+    });
+    router.post("/auth/users", deps.auth.requireRole(["owner"]), (req, res) => {
+      const parsed = authUserCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json(fail("VALIDATION_FAILED", "Auth user is invalid.", parsed.error.flatten()));
+        return;
+      }
+      res.status(201).json(ok(deps.storage.saveAuthUser(parsed.data)));
+    });
+    router.put("/auth/users/:steamId64", deps.auth.requireRole(["owner"]), (req, res) => {
+      const steamId64 = String(req.params.steamId64);
+      const existing = deps.storage.getAuthUser(steamId64);
+      if (!existing) {
+        res.status(404).json(fail("AUTH_USER_NOT_FOUND", "Auth user was not found."));
+        return;
+      }
+      const parsed = authUserUpdateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json(fail("VALIDATION_FAILED", "Auth user update is invalid.", parsed.error.flatten()));
+        return;
+      }
+      if (existing.role === "owner" && parsed.data.enabled === false) {
+        const enabledOwners = deps.storage.listAuthUsers().filter((user) => user.role === "owner" && user.enabled);
+        if (enabledOwners.length <= 1) {
+          res.status(409).json(fail("LAST_OWNER", "At least one enabled owner is required."));
+          return;
+        }
+      }
+      res.json(ok(deps.storage.saveAuthUser({ ...existing, ...parsed.data })));
+    });
+    router.delete("/auth/users/:steamId64", deps.auth.requireRole(["owner"]), (req, res) => {
+      try {
+        const deleted = deps.storage.deleteAuthUser(String(req.params.steamId64));
+        if (!deleted) {
+          res.status(404).json(fail("AUTH_USER_NOT_FOUND", "Auth user was not found."));
+          return;
+        }
+        res.json(ok({ deleted: true }));
+      } catch (error) {
+        res.status(409).json(fail("AUTH_USER_DELETE_FAILED", error instanceof Error ? error.message : String(error)));
+      }
+    });
+    router.get("/auth/action-logs", deps.auth.requireRole(["owner", "admin"]), (_req, res) => {
+      res.json(ok(deps.storage.listAuthActionLogs(250)));
+    });
+    router.use((req, res, next) => {
+      if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        next();
+        return;
+      }
+      const permission = permissionForRequest(req);
+      if (!permission) {
+        next();
+        return;
+      }
+      deps.auth!.requirePermission(permission)(req, res, next);
+    });
+  }
+
   router.get("/setup", (_req, res) => {
     res.json(ok(computeSetupStatus(deps.storage, deps.adapter)));
   });

@@ -9,6 +9,7 @@ import { computeSetupStatus } from "./setupStatus.js";
 import type { WebRconClient } from "./webRconClient.js";
 import type { RestartScheduler } from "./restartScheduler.js";
 import type { MetricsCollector } from "./metricsCollector.js";
+import type { AuthManager } from "./auth.js";
 
 export function attachWebSocketServer(
   server: http.Server,
@@ -19,7 +20,8 @@ export function attachWebSocketServer(
   adapter: RustAdapter,
   webRcon: WebRconClient,
   restartScheduler: RestartScheduler,
-  metrics?: MetricsCollector
+  metrics?: MetricsCollector,
+  auth?: AuthManager
 ): void {
   const wss = new WebSocketServer({ server, path: "/ws" });
   const broadcast = (payload: unknown) => {
@@ -46,6 +48,10 @@ export function attachWebSocketServer(
     const origin = request.headers.origin;
     if (origin && !origin.startsWith("http://127.0.0.1:") && !origin.startsWith("http://localhost:")) {
       socket.close(1008, "Only local origins are allowed.");
+      return;
+    }
+    if (auth && !auth.getContext(request).user) {
+      socket.close(1008, "Login required.");
       return;
     }
     socket.send(JSON.stringify({ type: "history", events: logger.recent(500) }));

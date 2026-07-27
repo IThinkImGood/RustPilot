@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added local Steam authentication with first-owner claim.
+- Added owner/admin/viewer user management.
+- Added authenticated WebSocket access and server-side role checks for mutating API actions.
+- Added CSRF protection, rate limiting, action logging, and permission checks for sensitive panel actions.
+
 ## v0.1.0-alpha.7
 
 ### Added

@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { ConsoleEvent, RconStatus, ScheduledRestartStatus, UsageMetrics } from "@rustpilot/shared/browser";
+import type { AuthStatus } from "@rustpilot/shared/browser";
 import { api } from "./api";
 import { buildWebSocketUrl, type WebSocketConnectionState } from "./ws";
 
 export interface StatusData {
   process: any;
+  auth?: AuthStatus;
   setup: any;
   paths: any;
   settings: any;
@@ -43,6 +45,10 @@ export function useRustPilot() {
 
   useEffect(() => {
     const configuredUrl = status?.websocket?.url;
+    if (status && !configuredUrl) {
+      setWsState("backend_unreachable");
+      return;
+    }
     if (!configuredUrl && !status && !error) return;
     let closed = false;
     let socket: WebSocket | null = null;
